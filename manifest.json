@@ -1,6 +1,6 @@
 {
-  "name": "Tecnoyork Electrónica",
-  "short_name": "Tecnoyork",
+  "name": "TECNOYORK ELECTRÓNICA",
+  "short_name": "TECNOYORK",
   "description": "Simulador interactivo de circuitos electrónicos con osciloscopio y componentes.",
   "start_url": "./index.html",
   "scope": "./",
