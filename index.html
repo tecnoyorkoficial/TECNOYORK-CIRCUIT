@@ -1839,14 +1839,19 @@ tft_display: { label:'Pantalla TFT SPI 2.4', cat:'Salida', icon:'📺', props:{V
 
 rotary_encoder: { label:'Encoder Rotativo', cat:'Control', icon:'☰', props:{pos:0.5, pressed:false, Vcc:5},
   terminals:[T(-40,-16,'VCC'), T(-40,16,'GND'), T(40,-16,'SW'), T(40,16,'DT'), T(0,34,'CLK')],
-  interactive:true,
-  onTap(c){ c.props.pos = (c.props.pos + 0.25) % 1.05; },
-  edges(c){
+  interactive: true,
+  onTap(c) { c.props.pos = (c.props.pos + 0.25) % 1.05; },
+  step(c, dt) {
+    c.state.dtPos = c.state.dtPos ?? c.props.pos;
+    c.state.dtPos += (c.props.pos - c.state.dtPos) * Math.min(1, dt * 8); // fase retrasada ~90°
+  },
+  edges(c) {
     const vcc_actual = c.state.Vt0 || 0;
-    if(vcc_actual < 3.0) return [{n:[0,4], type:'OPEN', value:1e9}];
+    if (vcc_actual < 3.0) return [{ n: [1, 4], type: 'OPEN', value: 1e9 }, { n: [1, 3], type: 'OPEN', value: 1e9 }];
     return [
-      {n:[0,4], type:'V', value:c.props.pos*c.props.Vcc, Rint:2},
-      {n:[0,2], type: c.props.pressed?'R':'OPEN', value:0.02}
+      { n: [1, 4], type: 'V', value: c.props.pos * c.props.Vcc, Rint: 2 },
+      { n: [1, 3], type: 'V', value: (c.state.dtPos ?? c.props.pos) * c.props.Vcc, Rint: 2 },
+      { n: [0, 2], type: c.props.pressed ? 'R' : 'OPEN', value: 0.02 }
     ];
   },
   draw(ctx,c){
