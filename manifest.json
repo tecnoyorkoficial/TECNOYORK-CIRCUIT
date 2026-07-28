@@ -1,6 +1,6 @@
 {
-  "name": "CircuitLab — Simulador de Circuitos",
-  "short_name": "CircuitLab",
+  "name": "Tecnoyork Electrónica",
+  "short_name": "Tecnoyork",
   "description": "Simulador interactivo de circuitos electrónicos con osciloscopio y componentes.",
   "start_url": "./index.html",
   "scope": "./",
