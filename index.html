@@ -1840,7 +1840,7 @@ tft_display: { label:'Pantalla TFT SPI 2.4', cat:'Salida', icon:'📺', props:{V
 rotary_encoder: { label:'Encoder Rotativo', cat:'Control', icon:'☰', props:{pos:0.5, pressed:false, Vcc:5},
   terminals:[T(-40,-16,'VCC'), T(-40,16,'GND'), T(40,-16,'SW'), T(40,16,'DT'), T(0,34,'CLK')],
   interactive: true,
-  onTap(c) { c.props.pos = (c.props.pos + 0.25) % 1.05; },
+  onTap(c) { c.props.pos = (c.props.pos + 0.25) % 1; },
   step(c, dt) {
     c.state.dtPos = c.state.dtPos ?? c.props.pos;
     c.state.dtPos += (c.props.pos - c.state.dtPos) * Math.min(1, dt * 8); // fase retrasada ~90°
@@ -2576,6 +2576,7 @@ function onMove(ev){
 function onUp(ev){
   const p = downInfo? downInfo.p : null;
  const wasDragging = !!dragging, wasPanning = !!panning;
+ const wasMoved = downInfo ? downInfo.moved : false;
  dragging = null; panning = null;
   if(!downInfo){ return; }
 
@@ -2584,9 +2585,9 @@ function onUp(ev){
     downInfo=null;
     return;
   }
-  if(wasDragging || wasPanning){ downInfo=null; return; }
+  if((wasDragging || wasPanning) && wasMoved){ downInfo=null; return; }
 
-  if(!downInfo.moved && !selectedType){
+  if(!wasMoved && !selectedType){
     const hitC = hitComponent(p.x,p.y);
     if(hitC){
       const def = COMPONENTS[hitC.type];
@@ -2953,12 +2954,19 @@ document.getElementById('btnLoad').addEventListener('click', ()=>{
     html+='</div>';
   }
   openOverlay('Cargar / Recientes', html);
-  overlayBody.querySelectorAll('.sitem').forEach(el=>{
-    el.addEventListener('click', (ev)=>{
-      if(ev.target.closest('.del')) return;
-      if(loadCircuit(el.dataset.key)){ closeOverlay(); }
-    });
+  overlayBody.querySelectorAll('.sitem').forEach(el => {
+  el.addEventListener('click', (ev) => {
+    if (ev.target.closest('.del')) return;
+    if (loadCircuit(el.dataset.key)) {
+      selectComponent(null);
+      wireStart = null;
+      selectedType = null;
+      updatePlacingChip();
+      updateModeUI();
+      closeOverlay();
+    }
   });
+});
   overlayBody.querySelectorAll('.del').forEach(btn=>{
     btn.addEventListener('click', (ev)=>{
       ev.stopPropagation();
