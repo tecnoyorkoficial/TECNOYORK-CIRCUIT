@@ -31,8 +31,8 @@
     overflow-x:auto; overflow-y:hidden; white-space:nowrap; scrollbar-width:none; -ms-overflow-style:none;}
   #topbar::-webkit-scrollbar{height:0; display:none;}
   #topbar .logo{margin-right:4px;display:flex;align-items:center;flex-shrink:0;height:100%;}
-  #topbar .logo-img{height:44px !important;max-height:44px !important;width:auto !important;
-    max-width:190px;object-fit:contain;display:block;}
+  #topbar .logo-img{height:48px !important;max-height:48px !important;width:230px !important;
+    object-fit:fill;display:block;}
   .tbtn{background:var(--panel2);border:1px solid var(--border);color:var(--text);
     border-radius:10px;padding:8px 10px;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;flex-shrink:0;}
   .tbtn:active{transform:scale(.95);}
@@ -451,7 +451,7 @@ relay: { label:'Relé', cat:'Control', icon:'⛭', props:{Rcoil:400, Ipull:0.008
   postSolve(c){ /* Icoil se lee de la rama 'coil' tras resolver */ },
   draw(ctx,c){
     leadLines(ctx,[[-40,-16],[-14,-16]]); leadLines(ctx,[[-40,16],[-14,16]]);
-    leadLines(ctx,[[40,-16],[14,-16]]); leadLines([[40,16],[14,16]]);
+    leadLines(ctx,[[40,-16],[14,-16]]); leadLines(ctx,[[40,16],[14,16]]);
     ctx.strokeStyle= (Math.abs(c.state?.Icoil||0)>=c.props.Ipull)? COL_WIRE_ON:COL_BODY;
     ctx.lineWidth=2; ctx.strokeRect(-14,-20,28,40);
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center'; ctx.fillText('RELÉ',0,4);
@@ -462,7 +462,7 @@ ammeter: { label:'Amperímetro', cat:'Medición', icon:'Ⓐ', props:{},
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1],type:'R',value:0.001, tag:'meter'}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-17,0]]); leadLines([[17,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-17,0]]); leadLines(ctx,[[17,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,17,0,Math.PI*2); ctx.stroke();
     ctx.fillStyle='#e7edf5'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center'; ctx.fillText('A',0,4);
     ctx.font='8.5px sans-serif'; ctx.fillStyle='#ffb02e';
@@ -474,7 +474,7 @@ voltmeter: { label:'Voltímetro', cat:'Medición', icon:'Ⓥ', props:{},
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1],type:'R',value:1e8, tag:'meter'}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-17,0]]); leadLines([[17,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-17,0]]); leadLines(ctx,[[17,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,17,0,Math.PI*2); ctx.stroke();
     ctx.fillStyle='#e7edf5'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center'; ctx.fillText('V',0,4);
     ctx.font='8.5px sans-serif'; ctx.fillStyle='#39d3a8';
@@ -490,7 +490,7 @@ multimeter: { label:'Multímetro', cat:'Medición', icon:'🔢', props:{mode:'V'
     return [{n:[0,1], type:'R', value:1e8, tag:'meter'}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-19,0]]); leadLines([[19,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-19,0]]); leadLines(ctx,[[19,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-19,-15,38,30);
     ctx.fillStyle='#0d1219'; ctx.fillRect(-16,-12,32,15);
     let txt, color;
@@ -521,7 +521,7 @@ capacitor: { label:'Condensador', cat:'Pasivos', icon:'⊣⊢', props:{C:100, ch
     c.state.charge = Math.max(0,Math.min(0.999,q));
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-8,0]]); leadLines([[8,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-8,0]]); leadLines(ctx,[[8,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=3;
     ctx.beginPath(); ctx.moveTo(-8,-15); ctx.lineTo(-8,15); ctx.moveTo(8,-15); ctx.lineTo(8,15); ctx.stroke();
     const q=c.state?.charge||0;
@@ -546,7 +546,7 @@ inductor: { label:'Bobina (Inductor)', cat:'Pasivos', icon:'⌇', props:{L:10},
     return [{n:[0,1], type:'R', value:R}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-24,0]]); leadLines([[24,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-24,0]]); leadLines(ctx,[[24,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath();
     for(let i=0;i<4;i++){ ctx.arc(-18+i*12,0,6,Math.PI,0,false); }
@@ -560,7 +560,7 @@ motor: { label:'Motor DC', cat:'Salida', icon:'⚙', props:{R:22},
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
   draw(ctx,c,sim){
-    leadLines(ctx,[[-40,0],[-19,0]]); leadLines([[19,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-19,0]]); leadLines(ctx,[[19,0],[40,0]]);
     const I=Math.abs(c.state?.I||0);
     c.state.spin = (c.state.spin||0) + I*sim.dt*400;
     ctx.save(); ctx.translate(0,0); ctx.rotate(c.state.spin);
@@ -575,7 +575,7 @@ speaker: { label:'Altavoz', cat:'Salida', icon:'🔊', props:{R:8},
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
   draw(ctx,c,sim){
-    leadLines(ctx,[[-40,0],[-18,0]]); leadLines([[18,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
     const on=Math.abs(c.state?.I||0)>0.01;
     ctx.fillStyle=COL_BODY;
     ctx.beginPath(); ctx.moveTo(-18,-8); ctx.lineTo(-6,-8); ctx.lineTo(10,-18); ctx.lineTo(10,18); ctx.lineTo(-6,8); ctx.lineTo(-18,8); ctx.closePath(); ctx.fill();
@@ -594,7 +594,7 @@ transistor_npn: { label:'Transistor NPN', cat:'Semiconductores', icon:'NPN', pro
     ];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,-10],[20,-34]]); leadLines([[14,10],[20,34]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,-10],[20,-34]]); leadLines(ctx,[[14,10],[20,34]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-14,-18); ctx.lineTo(-14,18); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-14,-10); ctx.lineTo(14,-10); ctx.moveTo(-14,10); ctx.lineTo(14,10); ctx.stroke();
@@ -615,7 +615,7 @@ transistor_pnp: { label:'Transistor PNP', cat:'Semiconductores', icon:'PNP', pro
     ];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,-10],[20,-34]]); leadLines([[14,10],[20,34]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,-10],[20,-34]]); leadLines(ctx,[[14,10],[20,34]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-14,-18); ctx.lineTo(-14,18); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-14,-10); ctx.lineTo(14,-10); ctx.moveTo(-14,10); ctx.lineTo(14,10); ctx.stroke();
@@ -640,7 +640,7 @@ sevenseg: { label:'Display 7 seg.', cat:'Salida', icon:'8', props:{R:150},
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-20,0]]); leadLines([[20,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
     const on = Math.abs(c.state?.I||0)>0.005;
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-20,-18,40,36);
     ctx.strokeStyle= on? '#ff3b3b' : '#3a1414'; ctx.lineWidth=3; ctx.lineCap='round';
@@ -653,7 +653,7 @@ solar_panel: { label:'Panel Solar', cat:'Fuentes', icon:'☀', props:{Vmax:6, li
   terminals:[T(-40,0,'-'),T(40,0,'+')],
   edges(c){ return [{n:[0,1], type:'V', value:Math.max(0,c.props.Vmax*c.props.light), Rint:1}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-24,0]]); leadLines([[24,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-24,0]]); leadLines(ctx,[[24,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-24,-14,48,28);
     ctx.fillStyle=`rgba(255,214,110,${0.15+c.props.light*0.55})`; ctx.fillRect(-23,-13,46,26);
     ctx.strokeStyle='#0b0f14'; ctx.lineWidth=1;
@@ -667,7 +667,7 @@ schottky: { label:'Diodo Schottky', cat:'Semiconductores', icon:'▷S', props:{V
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1], type:'DIODE', value:c.props.Vf, Ron:1.2}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-13,0]]); leadLines([[13,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-13,0]]); leadLines(ctx,[[13,0],[40,0]]);
     ctx.fillStyle= Math.abs(c.state?.I||0)>0.001? '#39d3a8':COL_BODY2;
     ctx.beginPath(); ctx.moveTo(-13,-11); ctx.lineTo(13,0); ctx.lineTo(-13,11); ctx.closePath(); ctx.fill();
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
@@ -682,7 +682,7 @@ mic: { label:'Micrófono', cat:'Sensores', icon:'🎤', props:{level:0.3, Rmin:2
   terminals:[T(-40,0),T(40,0)],
   edges(c){ const R = c.props.Rmax*Math.pow(1-c.props.level,2)+c.props.Rmin; return [{n:[0,1],type:'R',value:R}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-16,0]]); leadLines([[16,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,16,0,Math.PI*2); ctx.stroke();
     ctx.strokeStyle= c.props.level>0.5? COL_WIRE_ON : '#556274';
     for(let i=0;i<2;i++){ ctx.beginPath(); ctx.arc(0,0,6+i*4,-0.7,0.7); ctx.stroke(); }
@@ -695,7 +695,7 @@ ptc: { label:'Termistor (PTC)', cat:'Sensores', icon:'🌡', props:{temp:0.5, Rm
   terminals:[T(-40,0),T(40,0)],
   edges(c){ const R = c.props.Rmin + (c.props.Rmax-c.props.Rmin)*Math.pow(c.props.temp,2); return [{n:[0,1],type:'R',value:R}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-20,0]]); leadLines([[20,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-20,-9,40,18);
     ctx.fillStyle=`rgba(255,92,92,${0.1+c.props.temp*0.55})`; ctx.fillRect(-20,-9,40,18);
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center';
@@ -714,7 +714,7 @@ switch_spdt: { label:'Interruptor SPDT', cat:'Control', icon:'⇄', props:{sel:'
   interactive:true,
   onTap(c){ c.props.sel = c.props.sel==='A'?'B':'A'; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-20,0]]); leadLines([[22,-22],[40,-22]]); leadLines([[22,22],[40,22]]);
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[22,-22],[40,-22]]); leadLines(ctx,[[22,22],[40,22]]);
     drawTerminalDot(ctx,-20,0,true); drawTerminalDot(ctx,22,-22,true); drawTerminalDot(ctx,22,22,true);
     ctx.strokeStyle=COL_WIRE_ON; ctx.lineWidth=2.4;
     ctx.beginPath(); ctx.moveTo(-20,0); ctx.lineTo(20, c.props.sel==='A'?-20:20); ctx.stroke();
@@ -727,7 +727,7 @@ fan: { label:'Ventilador', cat:'Salida', icon:'🌀', props:{R:30},
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
   draw(ctx,c,sim){
-    leadLines(ctx,[[-40,0],[-20,0]]); leadLines([[20,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
     const I=Math.abs(c.state?.I||0);
     c.state.spin=(c.state.spin||0)+I*sim.dt*600;
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.stroke();
@@ -742,7 +742,7 @@ rheostat: { label:'Reóstato (R variable)', cat:'Pasivos', icon:'⏦R', props:{R
   terminals:[T(-40,0),T(40,0)],
   edges(c){ const R=Math.max(1,c.props.Rt*c.props.pos); return [{n:[0,1],type:'R',value:R}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-22,0]]); leadLines([[22,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-22,0]]); leadLines(ctx,[[22,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-22,-9,44,18);
     ctx.beginPath(); ctx.moveTo(-26,10); ctx.lineTo(26,-14); ctx.strokeStyle=COL_WIRE_ON; ctx.lineWidth=2; ctx.stroke();
     ctx.beginPath(); ctx.moveTo(26,-14); ctx.lineTo(20,-14); ctx.moveTo(26,-14); ctx.lineTo(26,-8); ctx.stroke();
@@ -759,7 +759,7 @@ varistor: { label:'Varistor (VDR)', cat:'Pasivos', icon:'⚡Ω', props:{Vth:18, 
     return [{n:[0,1], type:'R', value:R}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-18,0]]); leadLines([[18,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
     const clamping = Math.abs(c.state?.V||0) >= c.props.Vth;
     ctx.strokeStyle= clamping? '#39d3a8' : COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.ellipse(0,0,18,11,0,0,Math.PI*2); ctx.stroke();
@@ -774,7 +774,7 @@ current_source: { label:'Fuente de corriente', cat:'Fuentes', icon:'→I', props
   terminals:[T(-40,0,'-'),T(40,0,'+')],
   edges(c){ return [{n:[0,1], type:'I', value:c.props.I}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-16,0]]); leadLines([[16,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2; ctx.beginPath(); ctx.arc(0,0,16,0,Math.PI*2); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-7,0); ctx.lineTo(7,0); ctx.lineTo(3,-4); ctx.moveTo(7,0); ctx.lineTo(3,4);
     ctx.strokeStyle=COL_WIRE_ON; ctx.stroke();
@@ -787,7 +787,7 @@ photodiode: { label:'Fotodiodo', cat:'Sensores', icon:'☀▷|', props:{light:0.
   terminals:[T(-40,0,'anodo'),T(40,0,'catodo')],
   edges(c){ return [{n:[1,0], type:'I', value:c.props.Isc*c.props.light}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-13,0]]); leadLines([[13,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-13,0]]); leadLines(ctx,[[13,0],[40,0]]);
     ctx.fillStyle= c.props.light>0.4? '#ffd66e':COL_BODY2;
     ctx.beginPath(); ctx.moveTo(-13,-11); ctx.lineTo(13,0); ctx.lineTo(-13,11); ctx.closePath(); ctx.fill();
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(13,-11); ctx.lineTo(13,11); ctx.stroke();
@@ -801,7 +801,7 @@ flex_sensor: { label:'Sensor de flexión', cat:'Sensores', icon:'↝R', props:{b
   terminals:[T(-40,0),T(40,0)],
   edges(c){ const R = c.props.Rmin + (c.props.Rmax-c.props.Rmin)*c.props.bend; return [{n:[0,1],type:'R',value:R}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-24,0]]); leadLines([[24,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-24,0]]); leadLines(ctx,[[24,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     const bend=c.props.bend;
     ctx.beginPath(); ctx.moveTo(-24,0); ctx.quadraticCurveTo(0,-bend*22,24,0); ctx.stroke();
@@ -814,7 +814,7 @@ hygrometer: { label:'Sensor de humedad', cat:'Sensores', icon:'💧R', props:{hu
   terminals:[T(-40,0),T(40,0)],
   edges(c){ const R = c.props.Rmax*Math.pow(1-c.props.humidity,2)+c.props.Rmin; return [{n:[0,1],type:'R',value:R}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-20,0]]); leadLines([[20,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-20,-9,40,18);
     ctx.fillStyle=`rgba(80,180,255,${0.15+c.props.humidity*0.55})`; ctx.fillRect(-20,-9,40,18);
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center';
@@ -840,7 +840,7 @@ scr: { label:'Tiristor (SCR)', cat:'Semiconductores', icon:'SCR', props:{Igt:0.0
     } else if(Iload < c.props.Ih){ c.state.latched = false; }
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-13,0]]); leadLines([[13,0],[40,0]]); leadLines([[0,34],[0,14]]);
+    leadLines(ctx,[[-40,0],[-13,0]]); leadLines(ctx,[[13,0],[40,0]]); leadLines(ctx,[[0,34],[0,14]]);
     const on=c.state?.latched;
     ctx.fillStyle= on? '#ffb02e':COL_BODY2;
     ctx.beginPath(); ctx.moveTo(-13,-11); ctx.lineTo(13,0); ctx.lineTo(-13,11); ctx.closePath(); ctx.fill();
@@ -862,8 +862,8 @@ optocoupler: { label:'Optoacoplador', cat:'Semiconductores', icon:'⇹', props:{
     ];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-16],[-14,-16]]); leadLines([[-40,16],[-14,16]]);
-    leadLines([[40,-16],[14,-16]]); leadLines([[40,16],[14,16]]);
+    leadLines(ctx,[[-40,-16],[-14,-16]]); leadLines(ctx,[[-40,16],[-14,16]]);
+    leadLines(ctx,[[40,-16],[14,-16]]); leadLines(ctx,[[40,16],[14,16]]);
     const on = Math.abs(c.state?.Iled||0) >= c.props.Ith;
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-14,-24,28,48);
     ctx.fillStyle= on? 'rgba(255,176,46,.5)':'rgba(120,130,145,.15)'; ctx.fillRect(-14,-24,28,48);
@@ -875,7 +875,7 @@ thermostat: { label:'Termostato', cat:'Control', icon:'🌡⏻', props:{temp:0.4
   terminals:[T(-40,0),T(40,0)],
   edges(c){ const closed = c.props.temp >= c.props.threshold; return [{n:[0,1], type: closed?'R':'OPEN', value:0.05}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-24,0]]); leadLines([[24,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-24,0]]); leadLines(ctx,[[24,0],[40,0]]);
     const closed = c.props.temp >= c.props.threshold;
     drawTerminalDot(ctx,-24,0,true); drawTerminalDot(ctx,24,0,true);
     ctx.strokeStyle= closed? COL_WIRE_ON: COL_BODY; ctx.lineWidth=2.4;
@@ -893,7 +893,7 @@ reed_switch: { label:'Interruptor Reed', cat:'Control', icon:'🧲', props:{clos
   interactive:true,
   onTap(c){ c.props.closed = !c.props.closed; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-20,0]]); leadLines([[20,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-20,-8,40,16);
     ctx.strokeStyle= c.props.closed? COL_WIRE_ON:COL_BODY2; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-14,0);
@@ -910,7 +910,7 @@ pushbutton_nc: { label:'Pulsador NC (paro)', cat:'Control', icon:'⛔', props:{p
   interactive:true, momentary:true,
   onTap(c){ c.props.pressed = !c.props.pressed; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-14,10); ctx.lineTo(-14,-10); ctx.moveTo(14,10); ctx.lineTo(14,-10); ctx.stroke();
     ctx.fillStyle= c.props.pressed? '#ff5c5c':'#c94545';
@@ -924,7 +924,7 @@ heater: { label:'Resistencia calefactora', cat:'Salida', icon:'♨', props:{R:15
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-20,0]]); leadLines([[20,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
     const P = Math.abs((c.state?.I||0)*(c.state?.V||0));
     const glow = Math.min(1,P/2.5);
     if(glow>0.03){
@@ -967,8 +967,8 @@ sr_latch: { label:'Biestable SR (Flip-Flop)', cat:'Lógica', icon:'SR', props:{V
     ];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-15],[-16,-15]]); leadLines([[-40,15],[-16,15]]);
-    leadLines([[16,-15],[40,-15]]); leadLines([[16,15],[40,15]]);
+    leadLines(ctx,[[-40,-15],[-16,-15]]); leadLines(ctx,[[-40,15],[-16,15]]);
+    leadLines(ctx,[[16,-15],[40,-15]]); leadLines(ctx,[[16,15],[40,15]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-16,-22,32,44);
     ctx.fillStyle='#aab6c4'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center';
     ctx.fillText('SR',0,-2);
@@ -987,7 +987,7 @@ active_buzzer: { label:'Zumbador activo (con oscilador)', cat:'Salida', icon:'�
     return [{n:[0,1], type:'R', value: on? c.props.R : 1e8}];
   },
   draw(ctx,c,sim){
-    leadLines(ctx,[[-40,0],[-16,0]]); leadLines([[16,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
     const on = Math.abs(c.state?.I||0)>0.001;
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,16,0,Math.PI*2); ctx.stroke();
     if(on){ ctx.strokeStyle='rgba(255,176,46,.8)'; for(let i=0;i<3;i++){ ctx.beginPath(); ctx.arc(0,0,6+i*4+Math.sin(sim.simTime*30+i)*1.5,0,Math.PI*2); ctx.stroke(); } }
@@ -1003,7 +1003,7 @@ comparator: { label:'Comparador (LM393)', cat:'Lógica', icon:'CMP', props:{Vcc:
     return [{n:[2,'GND'], type:'GATEOUT', value: out? c.props.Vcc:0, tag:'gate', Rint:10}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-15],[-16,-15]]); leadLines([[-40,15],[-16,15]]); leadLines([[16,0],[40,0]]);
+    leadLines(ctx,[[-40,-15],[-16,-15]]); leadLines(ctx,[[-40,15],[-16,15]]); leadLines(ctx,[[16,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(-16,-20); ctx.lineTo(-16,20); ctx.lineTo(16,0); ctx.closePath(); ctx.stroke();
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='left';
@@ -1040,7 +1040,7 @@ mosfet_n: { label:'MOSFET Canal N', cat:'Semiconductores', icon:'N-MOS', props:{
     return [{n:[1,2], type: on?'R':'OPEN', value:c.props.Ron}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,-10],[20,-34]]); leadLines([[14,10],[20,34]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,-10],[20,-34]]); leadLines(ctx,[[14,10],[20,34]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-10,-18); ctx.lineTo(-10,18); ctx.stroke();
     const on = ((c.state?.Vt0||0)-(c.state?.Vt2||0))>c.props.Vgs_th;
@@ -1058,7 +1058,7 @@ mosfet_p: { label:'MOSFET Canal P', cat:'Semiconductores', icon:'P-MOS', props:{
     return [{n:[1,2], type: on?'R':'OPEN', value:c.props.Ron}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,-10],[20,-34]]); leadLines([[14,10],[20,34]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,-10],[20,-34]]); leadLines(ctx,[[14,10],[20,34]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-10,-18); ctx.lineTo(-10,18); ctx.stroke();
     const on = ((c.state?.Vt1||0)-(c.state?.Vt0||0))>c.props.Vgs_th;
@@ -1079,7 +1079,7 @@ darlington: { label:'Transistor Darlington', cat:'Semiconductores', icon:'DAR', 
     ];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,-10],[20,-34]]); leadLines([[14,10],[20,34]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,-10],[20,-34]]); leadLines(ctx,[[14,10],[20,34]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-14,-18); ctx.lineTo(-14,18); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-14,-10); ctx.lineTo(14,-10); ctx.moveTo(-14,10); ctx.lineTo(14,10); ctx.stroke();
@@ -1101,7 +1101,7 @@ voltage_regulator: { label:'Regulador de voltaje', cat:'Control', icon:'REG', pr
     return [{n:[1,2], type:'V', value:v, Rint:0.5}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-16],[-13,-16]]); leadLines([[0,34],[0,14]]); leadLines([[40,-16],[13,-16]]);
+    leadLines(ctx,[[-40,-16],[-13,-16]]); leadLines(ctx,[[0,34],[0,14]]); leadLines(ctx,[[40,-16],[13,-16]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-13,-20,26,34);
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center';
     ctx.fillText(c.props.Vout+'V',0,-2);
@@ -1117,8 +1117,8 @@ rectifier_bridge: { label:'Puente rectificador', cat:'Semiconductores', icon:'�
     return [{n:[3,2], type:'V', value:Vout, Rint:0.5}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-18],[-16,-18]]); leadLines([[-40,18],[-16,18]]);
-    leadLines([[40,-18],[16,-18]]); leadLines([[40,18],[16,18]]);
+    leadLines(ctx,[[-40,-18],[-16,-18]]); leadLines(ctx,[[-40,18],[-16,18]]);
+    leadLines(ctx,[[40,-18],[16,-18]]); leadLines(ctx,[[40,18],[16,18]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath();
     ctx.moveTo(0,-22); ctx.lineTo(22,0); ctx.lineTo(0,22); ctx.lineTo(-22,0); ctx.closePath(); ctx.stroke();
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center'; ctx.fillText('~ ⎓',0,4);
@@ -1137,8 +1137,8 @@ transformer: { label:'Transformador AC', cat:'Fuentes', icon:'⊃⊂', props:{ra
     ];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-16],[-8,-16]]); leadLines([[-40,16],[-8,16]]);
-    leadLines([[40,-16],[8,-16]]); leadLines([[40,16],[8,16]]);
+    leadLines(ctx,[[-40,-16],[-8,-16]]); leadLines(ctx,[[-40,16],[-8,16]]);
+    leadLines(ctx,[[40,-16],[8,-16]]); leadLines(ctx,[[40,16],[8,16]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2;
     for(let i=0;i<4;i++){ ctx.beginPath(); ctx.arc(-8,-16+i*11,5,-Math.PI/2,Math.PI/2,false); ctx.stroke(); }
     for(let i=0;i<4;i++){ ctx.beginPath(); ctx.arc(8,-16+i*11,5,Math.PI/2,-Math.PI/2,false); ctx.stroke(); }
@@ -1152,7 +1152,7 @@ crystal: { label:'Cristal de cuarzo', cat:'Pasivos', icon:'▯▯', props:{freq:
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-13,0]]); leadLines([[13,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-13,0]]); leadLines(ctx,[[13,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-13,-14,26,28);
     ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(-13,-14); ctx.lineTo(-13,14); ctx.moveTo(13,-14); ctx.lineTo(13,14); ctx.stroke();
@@ -1165,7 +1165,7 @@ coin_cell: { label:'Pila botón (CR2032)', cat:'Fuentes', icon:'⏺+', props:{V:
   terminals:[T(-40,0,'-'),T(40,0,'+')],
   edges(c){ return [{n:[0,1], type:'V', value:c.props.V, Rint:1.0}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-16,0]]); leadLines([[16,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,16,0,Math.PI*2); ctx.stroke();
     ctx.fillStyle='#aab6c4'; ctx.font='10px sans-serif'; ctx.textAlign='center'; ctx.fillText('+',0,4);
     ctx.font='8px sans-serif'; ctx.fillText(c.props.V+'V',0,28);
@@ -1176,7 +1176,7 @@ aa_battery: { label:'Pila AA (1.5V)', cat:'Fuentes', icon:'▮+', props:{V:1.5},
   terminals:[T(-40,0,'-'),T(40,0,'+')],
   edges(c){ return [{n:[0,1], type:'V', value:c.props.V, Rint:0.5}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-18,0]]); leadLines([[18,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-18,-12,36,24);
     ctx.fillStyle='#586576'; ctx.fillRect(14,-6,6,12);
     ctx.fillStyle='#aab6c4'; ctx.font='9px sans-serif'; ctx.textAlign='center';
@@ -1193,7 +1193,7 @@ neon_lamp: { label:'Lámpara de neón', cat:'Salida', icon:'●N', props:{Vth:60
     return [{n:[0,1], type:'R', value: on? c.props.Ron : 1e8}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,0],[40,0]]);
     const on = Math.abs(c.state?.V||0) >= c.props.Vth;
     if(on){
       const g=ctx.createRadialGradient(0,0,2,0,0,20);
@@ -1215,7 +1215,7 @@ hall_sensor: { label:'Sensor Hall (digital)', cat:'Sensores', icon:'⌘H', props
     return [{n:[2,'GND'], type:'V', value: on? c.props.Vcc:0, Rint:10}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-16],[-14,-16]]); leadLines([[-40,16],[-14,16]]); leadLines([[14,0],[40,0]]);
+    leadLines(ctx,[[-40,-16],[-14,-16]]); leadLines(ctx,[[-40,16],[-14,16]]); leadLines(ctx,[[14,0],[40,0]]);
     const on = c.props.field >= c.props.threshold;
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-14,-18,28,36);
     ctx.fillStyle= on? 'rgba(255,176,46,.4)':'rgba(120,130,145,.15)'; ctx.fillRect(-14,-18,28,36);
@@ -1229,7 +1229,7 @@ tilt_switch: { label:'Interruptor de inclinación', cat:'Control', icon:'⚖', p
   interactive:true,
   onTap(c){ c.props.closed = !c.props.closed; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-20,0]]); leadLines([[20,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-20,-10,40,20);
     ctx.fillStyle= c.props.closed? COL_WIRE_ON : '#556274';
     ctx.beginPath(); ctx.arc(c.props.closed? 10:-10, 3, 5,0,Math.PI*2); ctx.fill();
@@ -1242,7 +1242,7 @@ gas_sensor: { label:'Sensor de gas (MQ)', cat:'Sensores', icon:'☁R', props:{ga
   terminals:[T(-40,0),T(40,0)],
   edges(c){ const R = c.props.Rmax*Math.pow(1-c.props.gas,2)+c.props.Rmin; return [{n:[0,1],type:'R',value:R}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-20,0]]); leadLines([[20,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.stroke();
     ctx.fillStyle=`rgba(150,255,150,${0.1+c.props.gas*0.55})`; ctx.beginPath(); ctx.arc(0,0,18,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
@@ -1256,7 +1256,7 @@ dip_switch: { label:'Interruptor DIP', cat:'Control', icon:'▤', props:{closed:
   interactive:true,
   onTap(c){ c.props.closed = !c.props.closed; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-18,0]]); leadLines([[18,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-18,-11,36,22);
     ctx.fillStyle= c.props.closed? COL_WIRE_ON:'#586576';
     ctx.fillRect(c.props.closed? -14:2, -8, 12, 16);
@@ -1282,7 +1282,7 @@ resettable_fuse: { label:'Fusible rearmable (PTC)', cat:'Control', icon:'⎔', p
     }
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-18,0]]); leadLines([[18,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
     ctx.strokeStyle= c.props.tripped? '#ff5c5c':COL_BODY; ctx.lineWidth=2;
     ctx.beginPath(); ctx.ellipse(0,0,18,10,0,0,Math.PI*2); ctx.stroke();
     ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
@@ -1298,7 +1298,7 @@ phototransistor: { label:'Fototransistor', cat:'Semiconductores', icon:'☀NPN',
     return [{n:[0,1], type:'R', value:R}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-14,-16); ctx.lineTo(-14,16); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-14,-8); ctx.lineTo(14,-16); ctx.moveTo(-14,8); ctx.lineTo(14,16); ctx.stroke();
@@ -1316,7 +1316,7 @@ igbt: { label:'IGBT (potencia)', cat:'Semiconductores', icon:'IGBT', props:{Vge_
     return [{n:[1,2], type: on?'R':'OPEN', value:c.props.Ron}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,-10],[20,-34]]); leadLines([[14,10],[20,34]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,-10],[20,-34]]); leadLines(ctx,[[14,10],[20,34]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-10,-18); ctx.lineTo(-10,18); ctx.stroke();
     const on = ((c.state?.Vt0||0)-(c.state?.Vt2||0))>c.props.Vge_th;
@@ -1331,7 +1331,7 @@ lm35: { label:'Sensor de temperatura LM35', cat:'Sensores', icon:'🌡V', props:
   terminals:[T(-40,0,'GND'),T(40,0,'Vout')],
   edges(c){ return [{n:[0,1], type:'V', value:Math.max(0,c.props.temp*c.props.Vmax), Rint:2}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-16,0]]); leadLines([[16,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(-16,-12); ctx.lineTo(16,-12); ctx.lineTo(16,12); ctx.lineTo(-16,12); ctx.closePath(); ctx.stroke();
     ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('LM35',0,3);
@@ -1343,7 +1343,7 @@ thermocouple: { label:'Termopar (tipo K)', cat:'Sensores', icon:'⚡🌡', props
   terminals:[T(-40,0,'-'),T(40,0,'+')],
   edges(c){ const v = c.props.tempDiff*c.props.mvPerUnit/1000; return [{n:[0,1], type:'V', value:v, Rint:5}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,0],[40,0]]);
     ctx.strokeStyle=COL_BODY2; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-14,-10); ctx.lineTo(0,10); ctx.lineTo(14,-10); ctx.stroke();
     ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
     ctx.fillText((c.props.tempDiff*c.props.mvPerUnit).toFixed(1)+' mV', 0, 26);
@@ -1354,7 +1354,7 @@ piezo_sensor: { label:'Sensor piezoeléctrico (vibración)', cat:'Sensores', ico
   terminals:[T(-40,0),T(40,0)],
   edges(c,sim){ const v=c.props.vibration*c.props.Vmax*Math.sin(2*Math.PI*18*sim.simTime); return [{n:[0,1],type:'V',value:v, Rint:5}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-16,0]]); leadLines([[16,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,16,0,Math.PI*2); ctx.stroke();
     ctx.beginPath();
     for(let x=-10;x<=10;x++){ const y=-Math.sin(x/10*Math.PI*3)*6*c.props.vibration; x===-10?ctx.moveTo(x,y):ctx.lineTo(x,y); }
@@ -1368,7 +1368,7 @@ distance_sensor: { label:'Sensor de distancia (IR)', cat:'Sensores', icon:'📏'
   terminals:[T(-40,0,'GND'),T(40,0,'Vout')],
   edges(c){ const v = c.props.Vmax*Math.pow(1-c.props.distance,1.4); return [{n:[0,1],type:'V',value:Math.max(0,v), Rint:2}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-18,0]]); leadLines([[18,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-18,-10,36,20);
     ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('IR',0,3);
     ctx.font='8px sans-serif'; ctx.fillText('d '+Math.round(c.props.distance*100)+'%',0,24);
@@ -1386,8 +1386,8 @@ joystick: { label:'Joystick analógico (X/Y)', cat:'Sensores', icon:'✛', props
     ];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-20],[-16,-20]]); leadLines([[-40,20],[-16,20]]);
-    leadLines([[40,-20],[16,-20]]); leadLines([[40,20],[16,20]]);
+    leadLines(ctx,[[-40,-20],[-16,-20]]); leadLines(ctx,[[-40,20],[-16,20]]);
+    leadLines(ctx,[[40,-20],[16,-20]]); leadLines(ctx,[[40,20],[16,20]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,18,0,Math.PI*2); ctx.stroke();
     const jx=(c.props.posX-0.5)*24, jy=(c.props.posY-0.5)*24;
     ctx.fillStyle=COL_WIRE_ON; ctx.beginPath(); ctx.arc(jx,jy,6,0,Math.PI*2); ctx.fill();
@@ -1408,8 +1408,8 @@ dpdt_switch: { label:'Interruptor DPDT (doble)', cat:'Control', icon:'⇄⇄', p
   interactive:true,
   onTap(c){ c.props.sel = c.props.sel==='A'?'B':'A'; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-20],[-20,-20]]); leadLines([[22,-32],[40,-32]]); leadLines([[22,-8],[40,-8]]);
-    leadLines([[-40,20],[-20,20]]); leadLines([[22,8],[40,8]]); leadLines([[22,32],[40,32]]);
+    leadLines(ctx,[[-40,-20],[-20,-20]]); leadLines(ctx,[[22,-32],[40,-32]]); leadLines(ctx,[[22,-8],[40,-8]]);
+    leadLines(ctx,[[-40,20],[-20,20]]); leadLines(ctx,[[22,8],[40,8]]); leadLines(ctx,[[22,32],[40,32]]);
     ctx.strokeStyle=COL_WIRE_ON; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-20,-20); ctx.lineTo(20, c.props.sel==='A'?-32:-8); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-20,20); ctx.lineTo(20, c.props.sel==='A'?8:32); ctx.stroke();
@@ -1429,8 +1429,8 @@ lighted_pushbutton: { label:'Pulsador iluminado', cat:'Control', icon:'💡⏺',
   interactive:true, momentary:true,
   onTap(c){ c.props.pressed = !c.props.pressed; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-14],[-14,-14]]); leadLines([[14,-14],[40,-14]]);
-    leadLines([[-40,14],[-14,14]]); leadLines([[14,14],[40,14]]);
+    leadLines(ctx,[[-40,-14],[-14,-14]]); leadLines(ctx,[[14,-14],[40,-14]]);
+    leadLines(ctx,[[-40,14],[-14,14]]); leadLines(ctx,[[14,14],[40,14]]);
     const glow = Math.min(1,(c.state?.Iled||0)/0.015);
     ctx.fillStyle = c.props.pressed? COL_WIRE_ON : `rgba(255,176,46,${(0.1+glow*0.7).toFixed(2)})`;
     ctx.beginPath(); ctx.arc(0,-2,13,0,Math.PI*2); ctx.fill();
@@ -1462,7 +1462,7 @@ electrolytic_capacitor: { label:'Condensador Electrolítico', cat:'Pasivos', ico
     if(V < -0.5 || V > c.props.Vmax) c.props.failed = true;
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-8,0]]); leadLines([[8,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-8,0]]); leadLines(ctx,[[8,0],[40,0]]);
     ctx.strokeStyle= c.props.failed? '#ff5c5c' : COL_BODY; ctx.lineWidth=3;
     ctx.beginPath(); ctx.moveTo(-8,-15); ctx.lineTo(-8,15); ctx.stroke();
     ctx.beginPath(); ctx.arc(11,0,15,Math.PI*0.65,-Math.PI*0.65); ctx.stroke();
@@ -1483,7 +1483,7 @@ circuit_breaker: { label:'Disyuntor (breaker)', cat:'Control', icon:'⌁', props
   interactive:true,
   onTap(c){ if(c.props.tripped) c.props.tripped = false; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-18,0]]); leadLines([[18,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
     ctx.strokeStyle= c.props.tripped? '#ff5c5c':COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-18,8); ctx.lineTo(18,8); ctx.lineTo(18,-8);
     if(!c.props.tripped) ctx.lineTo(-18,-8); else ctx.lineTo(2,-2);
@@ -1507,7 +1507,7 @@ rgb_led: { label:'LED RGB (cátodo común)', cat:'Salida', icon:'◉', props:{Vf
     ];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,-20],[40,-20]]); leadLines([[14,0],[40,0]]); leadLines([[14,20],[40,20]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,-20],[40,-20]]); leadLines(ctx,[[14,0],[40,0]]); leadLines(ctx,[[14,20],[40,20]]);
     const Ir=Math.abs(c.state?.I_r||0), Ig=Math.abs(c.state?.I_g||0), Ib=Math.abs(c.state?.I_b||0);
     const gr=Math.min(1,Ir/0.015), gg=Math.min(1,Ig/0.015), gb=Math.min(1,Ib/0.015);
     ctx.fillStyle=`rgba(${Math.min(255,40+215*gr)|0},${Math.min(255,40+215*gg)|0},${Math.min(255,40+215*gb)|0},0.9)`;
@@ -1547,8 +1547,8 @@ timer555: { label:'Timer 555', cat:'Módulos', icon:'555', props:{mode:'astable'
     return [{n:[4,'GND'], type:'V', value:V, Rint:5}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-30,-20],[-14,-20]]); leadLines([[-30,0],[-14,0]]); leadLines([[-30,20],[-14,20]]);
-    leadLines([[30,-20],[14,-20]]); leadLines([[30,0],[14,0]]); leadLines([[30,20],[14,20]]);
+    leadLines(ctx,[[-30,-20],[-14,-20]]); leadLines(ctx,[[-30,0],[-14,0]]); leadLines(ctx,[[-30,20],[-14,20]]);
+    leadLines(ctx,[[30,-20],[14,-20]]); leadLines(ctx,[[30,0],[14,0]]); leadLines(ctx,[[30,20],[14,20]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-14,-24,28,48);
     ctx.fillStyle='#aab6c4'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('555',0,3);
     ctx.font='7.5px sans-serif';
@@ -1577,9 +1577,9 @@ opamp: { label:'Amplificador Operacional', cat:'Módulos', icon:'▷OP', props:{
     return [{n:[4,'GND'], type:'V', value:vout, Rint:2}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-30,-20],[-10,-10]]); leadLines([[-30,20],[-10,10]]);
-    leadLines([[0,-30],[0,-12]]); leadLines([[0,30],[0,12]]);
-    leadLines([[40,0],[10,0]]);
+    leadLines(ctx,[[-30,-20],[-10,-10]]); leadLines(ctx,[[-30,20],[-10,10]]);
+    leadLines(ctx,[[0,-30],[0,-12]]); leadLines(ctx,[[0,30],[0,12]]);
+    leadLines(ctx,[[40,0],[10,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-10,-22); ctx.lineTo(14,0); ctx.lineTo(-10,22); ctx.closePath(); ctx.stroke();
     ctx.fillStyle='#aab6c4'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('A',-2,3);
@@ -1603,8 +1603,8 @@ arduino: { label:'Arduino Nano', cat:'Módulos', icon:'MCU', props:{Vcc:5, modeD
     c.state.A0 = c.state.Vt3||0;
   },
   draw(ctx,c){
-    leadLines(ctx,[[-30,-20],[-14,-20]]); leadLines([[-30,0],[-14,0]]); leadLines([[-30,20],[-14,20]]);
-    leadLines([[30,-20],[14,-20]]); leadLines([[30,0],[14,0]]); leadLines([[30,20],[14,20]]);
+    leadLines(ctx,[[-30,-20],[-14,-20]]); leadLines(ctx,[[-30,0],[-14,0]]); leadLines(ctx,[[-30,20],[-14,20]]);
+    leadLines(ctx,[[30,-20],[14,-20]]); leadLines(ctx,[[30,0],[14,0]]); leadLines(ctx,[[30,20],[14,20]]);
     ctx.strokeStyle='#4da6ff'; ctx.lineWidth=2; ctx.strokeRect(-14,-26,28,52);
     ctx.fillStyle='#aab6c4'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('MCU',0,2);
     ctx.font='7px sans-serif';
@@ -1625,7 +1625,7 @@ dcdc: { label:'Módulo DC-DC Buck', cat:'Módulos', icon:'⇲5V', props:{Vset:5.
     return [{n:[2,1], type:'V', value:vout, Rint:0.5}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-18,0]]); leadLines([[0,25],[0,12]]); leadLines([[40,0],[18,0]]);
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[0,25],[0,12]]); leadLines(ctx,[[40,0],[18,0]]);
     ctx.strokeStyle='#7de37d'; ctx.lineWidth=2; ctx.strokeRect(-18,-14,36,28);
     ctx.fillStyle='rgba(125,227,125,.15)'; ctx.fillRect(-18,-14,36,28);
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center';
@@ -1644,7 +1644,7 @@ servo: { label:'Servo SG90 + Driver', cat:'Módulos', icon:'🎯', props:{Vcc:5.
   },
   edges(c){ return [{n:[0,1], type:'R', value:180, tag:'load'}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-30,0],[-18,0]]); leadLines([[18,0],[30,0]]); leadLines([[0,-30],[0,-16]]);
+    leadLines(ctx,[[-30,0],[-18,0]]); leadLines(ctx,[[18,0],[30,0]]); leadLines(ctx,[[0,-30],[0,-16]]);
     ctx.fillStyle='rgba(40,48,60,.9)'; ctx.fillRect(-18,-10,36,20); ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-18,-10,36,20);
     const ang = (c.state?.angle||0)*Math.PI/180;
     ctx.save(); ctx.translate(0,0); ctx.rotate(ang);
@@ -1665,8 +1665,8 @@ xl4015: { label:'DC-DC XL4015', cat:'Módulos', icon:'⇲5V', props:{Vset:5.0, e
     return [{n:[3,2], type:'V', value:vout, Rint:0.5}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-16],[-16,-16]]); leadLines([[-40,16],[-16,16]]);
-    leadLines([[16,-16],[40,-16]]); leadLines([[16,16],[40,16]]);
+    leadLines(ctx,[[-40,-16],[-16,-16]]); leadLines(ctx,[[-40,16],[-16,16]]);
+    leadLines(ctx,[[16,-16],[40,-16]]); leadLines(ctx,[[16,16],[40,16]]);
     ctx.strokeStyle='#7de37d'; ctx.lineWidth=2; ctx.strokeRect(-16,-20,32,40);
     ctx.fillStyle='rgba(125,227,125,.15)'; ctx.fillRect(-16,-20,32,40);
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center';
@@ -1686,8 +1686,8 @@ lm2596: { label:'DC-DC LM2596', cat:'Módulos', icon:'⇲5V', props:{Vset:5.0, e
     return [{n:[3,2], type:'V', value:vout, Rint:0.5}];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-16],[-16,-16]]); leadLines([[-40,16],[-16,16]]);
-    leadLines([[16,-16],[40,-16]]); leadLines([[16,16],[40,16]]);
+    leadLines(ctx,[[-40,-16],[-16,-16]]); leadLines(ctx,[[-40,16],[-16,16]]);
+    leadLines(ctx,[[16,-16],[40,-16]]); leadLines(ctx,[[16,16],[40,16]]);
     ctx.strokeStyle='#4da6ff'; ctx.lineWidth=2; ctx.strokeRect(-16,-20,32,40);
     ctx.fillStyle='rgba(77,166,255,.15)'; ctx.fillRect(-16,-20,32,40);
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center';
@@ -1701,7 +1701,7 @@ banana_jacks: { label:'Bornes Banana', cat:'Control', icon:'⎈', props:{},
   terminals:[T(-40,0,'rojo'),T(40,0,'negro')],
   edges(c){ return [{n:[0,1], type:'R', value:0.001}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,0],[40,0]]);
     ctx.fillStyle='#ff3b3b'; ctx.beginPath(); ctx.arc(-14,0,8,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='#1c2530'; ctx.beginPath(); ctx.arc(-14,0,4,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='#1a1a1a'; ctx.beginPath(); ctx.arc(14,0,8,0,Math.PI*2); ctx.fill();
@@ -1713,7 +1713,7 @@ usb_port: { label:'Puerto USB 5V', cat:'Fuentes', icon:'⏻', props:{V:5},
   terminals:[T(-40,0,'+'),T(40,0,'-')],
   edges(c){ return [{n:[0,1], type:'V', value:c.props.V, Rint:0.5}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-16,0]]); leadLines([[16,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
     ctx.fillStyle=COL_BODY2; ctx.fillRect(-16,-10,26,20);
     ctx.fillStyle='#0b0f14'; ctx.fillRect(-12,-6,18,12);
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center';
@@ -1725,7 +1725,7 @@ fan_12v: { label:'Ventilador 12V', cat:'Salida', icon:'🌀', props:{R:80, nomin
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
   draw(ctx,c,sim){
-    leadLines(ctx,[[-40,0],[-20,0]]); leadLines([[20,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
     const I=Math.abs(c.state?.I||0);
     const V = Math.abs(c.state?.V||0);
     const speedFactor = Math.min(1, V / c.props.nominalV);
@@ -1744,7 +1744,7 @@ heatsink: { label:'Disipador Aluminio', cat:'Pasivos', icon:'▤▤', props:{},
   terminals:[T(-40,0),T(40,0)],
   edges(c){ return [{n:[0,1], type:'R', value:0.001}]; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-18,0]]); leadLines([[18,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
     ctx.strokeStyle='#a8b0bc'; ctx.lineWidth=1.6;
     ctx.fillStyle='rgba(168,176,188,0.2)';
     ctx.fillRect(-18,-12,36,24);
@@ -1830,9 +1830,9 @@ rotary_encoder: { label:'Encoder Rotativo', cat:'Control', icon:'☰', props:{po
     ];
   },
   draw(ctx,c){
-    leadLines(ctx,[[-40,-16],[-16,-16]]); leadLines([[-40,16],[-16,16]]);
-    leadLines([[16,-16],[40,-16]]); leadLines([[16,16],[40,16]]);
-    leadLines([[0,34],[0,16]]);
+    leadLines(ctx,[[-40,-16],[-16,-16]]); leadLines(ctx,[[-40,16],[-16,16]]);
+    leadLines(ctx,[[16,-16],[40,-16]]); leadLines(ctx,[[16,16],[40,16]]);
+    leadLines(ctx,[[0,34],[0,16]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,16,0,Math.PI*2); ctx.stroke();
     ctx.save(); ctx.rotate(c.props.pos*Math.PI*2);
     ctx.strokeStyle=COL_WIRE_ON; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-14); ctx.stroke();
@@ -1848,7 +1848,7 @@ menu_button: { label:'Pulsador de Menú', cat:'Control', icon:'☰⏺', props:{p
   interactive:true, momentary:true,
   onTap(c){ c.props.pressed = !c.props.pressed; },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-14,0]]); leadLines([[14,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,0],[40,0]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.2;
     ctx.beginPath(); ctx.moveTo(-14,10); ctx.lineTo(-14,-10); ctx.moveTo(14,10); ctx.lineTo(14,-10); ctx.stroke();
     ctx.fillStyle= c.props.pressed? COL_WIRE_ON:'#586576';
@@ -1874,9 +1874,9 @@ function gateDef(name, fn){
   };
 }
 function drawGateBody(ctx,c,name,nin){
-  if(nin===2){ leadLines(ctx,[[-40,-15],[-16,-15]]); leadLines([[-40,15],[-16,15]]); }
+  if(nin===2){ leadLines(ctx,[[-40,-15],[-16,-15]]); leadLines(ctx,[[-40,15],[-16,15]]); }
  else { leadLines(ctx,[[-40,0],[-16,0]]); }
-  leadLines([[16,0],[40,0]]);
+  leadLines(ctx,[[16,0],[40,0]]);
   ctx.strokeStyle=COL_BODY; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(-16,-18); ctx.lineTo(-2,-18);
  ctx.quadraticCurveTo(16,-18,16,0); ctx.quadraticCurveTo(16,18,-2,18); ctx.lineTo(-16,18); ctx.closePath(); ctx.stroke();
