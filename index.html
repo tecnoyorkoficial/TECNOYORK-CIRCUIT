@@ -150,6 +150,7 @@
     <div class="logo"><img src="logo.png" alt="Tecnoyork Electrónica" class="logo-img"></div>
     <button class="tbtn" id="btnAddComp">➕ Componentes</button>
     <button class="tbtn" id="btnWire">🔌 Cable</button>
+    <button class="tbtn danger" id="btnCutWire">✂ Cortar</button>
     <button class="tbtn" id="btnEnv">🌡️ Entorno</button>
     <button class="tbtn" id="btnScope">📊 Osciloscopio</button>
     <button class="tbtn" id="btnPower">▶ Encender</button>
@@ -309,11 +310,27 @@ pushbutton: { label:'Pulsador', cat:'Control', icon:'⏺', props:{pressed:false}
   }
 },
 
-led: { label:'LED', cat:'Salida', icon:'💡', props:{Vf:2.0, color:'#ff3b3b'},
+led: { label:'LED', cat:'Salida', icon:'💡', props:{Vf:2.0, color:'#ff3b3b', Imax:0.025, burned:false},
   terminals:[T(-40,0,'anodo'),T(40,0,'catodo')],
-  edges(c){ return [{n:[0,1], type:'DIODE', value:c.props.Vf, Ron:12}]; },
+  edges(c){
+    if(c.props.burned) return [{n:[0,1], type:'OPEN', value:1e9}];
+    return [{n:[0,1], type:'DIODE', value:c.props.Vf, Ron:12}];
+  },
+  postSolve(c){
+    if(!c.props.burned && Math.abs(c.state?.I||0) > c.props.Imax) c.props.burned = true;
+  },
   draw(ctx,c,sim){
     leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
+    if(c.props.burned){
+      ctx.fillStyle = '#1a1010';
+      ctx.beginPath(); ctx.moveTo(-14,-13); ctx.lineTo(14,0); ctx.lineTo(-14,13); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='#3a1414'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(14,-13); ctx.lineTo(14,13); ctx.stroke();
+      ctx.strokeStyle='#5a3020'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(-8,-6); ctx.lineTo(-2,2); ctx.lineTo(-9,4); ctx.moveTo(2,-4); ctx.lineTo(7,3); ctx.stroke();
+      ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('QUEMADO', 0, 24);
+      return;
+    }
     const I = Math.abs(c.state?.I||0);
     const glow = Math.min(1, I/0.02);
     if(glow>0.02){
@@ -2367,6 +2384,7 @@ let selectedType = null;
 let selectedComp = null;
 let wireMode = false;
 let wireStart = null;
+let cutMode = false;
 let dragging = null;
 let dragOffset = {x:0,y:0};
 let particlePhase = 0;
@@ -2438,8 +2456,8 @@ function buildPalette(filter){
       const btn=document.createElement('div'); btn.className='comp-btn'; btn.dataset.type=key;
       if(selectedType===key) btn.classList.add('active');
       btn.innerHTML = `<div class="icon-wrap"><img src="${renderComponentIcon(key)}" alt=""></div><div class="lbl">${def.label}</div>`;
-      btn.addEventListener('click', ()=>{
- selectedType = key; selectedComp=null; wireMode=false;
+     btn.addEventListener('click', ()=>{
+ selectedType = key; selectedComp=null; wireMode=false; cutMode=false;
         selectComponent(null); updateModeUI(); updatePlacingChip(); closePicker();
       });
       grid.appendChild(btn);
@@ -2452,7 +2470,7 @@ function buildPalette(filter){
 function openPicker(){ pickerModal.classList.add('open'); pickerBackdrop.classList.add('open'); pickerSearch.value=''; buildPalette(''); pickerSearch.focus(); }
 function closePicker(){ pickerModal.classList.remove('open'); pickerBackdrop.classList.remove('open'); }
 document.getElementById('btnAddComp').addEventListener('click', ()=>{
-  wireMode=false; updateModeUI();
+  wireMode=false; cutMode=false; updateModeUI();
   openPicker();
 });
 document.getElementById('pickerClose').addEventListener('click', closePicker);
@@ -2514,6 +2532,27 @@ function hitTerminal(x,y){
   }
   return null;
 }
+function distToSeg(px,py,x1,y1,x2,y2){
+  const dx=x2-x1, dy=y2-y1;
+  const lenSq = dx*dx+dy*dy;
+  let t = lenSq? ((px-x1)*dx+(py-y1)*dy)/lenSq : 0;
+  t = Math.max(0,Math.min(1,t));
+  const cx=x1+t*dx, cy=y1+t*dy;
+  return Math.hypot(px-cx,py-cy);
+}
+function hitWire(x,y){
+  for(let i=wires.length-1;i>=0;i--){
+    const w=wires[i];
+    const ca=comps.find(c=>c.id===w.a.compId), cb=comps.find(c=>c.id===w.b.compId);
+    if(!ca||!cb) continue;
+    const pa=termAbs(ca,w.a.term), pb=termAbs(cb,w.b.term);
+    const pts = pathForWire(pa,pb);
+    for(let s=1;s<pts.length;s++){
+      if(distToSeg(x,y,pts[s-1][0],pts[s-1][1],pts[s][0],pts[s][1]) < 10) return w;
+    }
+  }
+  return null;
+}
 
 function getPos(ev){
   const r=canvas.getBoundingClientRect();
@@ -2526,6 +2565,16 @@ function onDown(ev){
   const sp=getPos(ev);
   const p=toWorld(sp);
   downInfo={p, sp, t:performance.now(), moved:false, hitTermOnDown:false};
+
+  if(cutMode){
+    const hitW = hitWire(p.x,p.y);
+    if(hitW){
+      wires.splice(wires.indexOf(hitW),1);
+    } else {
+      panning = {startSp:sp, startPan:{x:panX,y:panY}};
+    }
+    return;
+  }
 
   if(wireMode){
     const term = hitTerminal(p.x,p.y);
@@ -2579,6 +2628,8 @@ function onUp(ev){
  const wasMoved = downInfo ? downInfo.moved : false;
  dragging = null; panning = null;
   if(!downInfo){ return; }
+
+  if(cutMode){ downInfo=null; return; }
 
   if(wireMode){
     if(!downInfo.hitTermOnDown && !downInfo.moved) wireStart = null;
@@ -2679,6 +2730,17 @@ const REF_MODELS = {
 function refOptions(list){ return list.map(m=>({value:m.id, label:m.id})); }
 function refApply(list){ return (c,val)=>{ const m=list.find(x=>x.id===val); if(m){ Object.assign(c.props, m.set); } c.props.modelo=val; }; }
 
+function isDamaged(c){
+  if(c.type==='fuse') return !!c.props.blown;
+  if(c.type==='electrolytic_capacitor') return !!c.props.failed;
+  if(c.type==='led') return !!c.props.burned;
+  return false;
+}
+function resetDamage(c){
+  if(c.type==='fuse') c.props.blown=false;
+  if(c.type==='electrolytic_capacitor'){ c.props.failed=false; c.state.charge=0; }
+  if(c.type==='led') c.props.burned=false;
+}
 function renderProps(c){
   const def = COMPONENTS[c.type];
   propPanel.style.display='block';
@@ -2697,13 +2759,20 @@ function renderProps(c){
       html += `<label>${f.label}</label><input type="number" step="${f.step||1}" value="${c.props[f.key]}" data-key="${f.key}">`;
     }
   });
-  if(c.type==='arduino'){
+ if(c.type==='arduino'){
     html += `<button class="tbtn on" id="btnArdProgram" style="width:100%;margin-top:10px;">💻 Programar Arduino</button>`;
+  }
+  if(isDamaged(c)){
+    html += `<button class="tbtn danger" id="btnResetDamage" style="width:100%;margin-top:10px;">🔧 Reestablecer</button>`;
   }
   propPanel.innerHTML = html;
   if(c.type==='arduino'){
     const btn = document.getElementById('btnArdProgram');
     if(btn) btn.addEventListener('click', ()=> openArduinoEditor(c));
+  }
+  if(isDamaged(c)){
+    const btnR = document.getElementById('btnResetDamage');
+    if(btnR) btnR.addEventListener('click', ()=>{ resetDamage(c); renderProps(c); });
   }
   propPanel.querySelectorAll('input').forEach(inp=>{
     inp.addEventListener('input', ()=>{
@@ -2726,7 +2795,7 @@ function propFieldsFor(type){
     resistor:[{key:'R',label:'Resistencia (Ω)'}],
     battery:[{key:'V',label:'Voltaje (V)', step:0.5}],
     acsource:[{key:'Vp',label:'Voltaje pico (V)',step:0.5},{key:'f',label:'Frecuencia (Hz)',step:0.1}],
-    led:[{key:'Vf',label:'Voltaje directo (V)',step:0.1}],
+    led:[{key:'Vf',label:'Voltaje directo (V)',step:0.1},{key:'Imax',label:'Corriente máx. (A)',step:0.005}],
     diode:[{key:'modelo',label:'Referencia',type:'select',options:refOptions(REF_MODELS.diode),apply:refApply(REF_MODELS.diode)},
       {key:'Vf',label:'Voltaje directo (V)',step:0.1}],
     zener:[{key:'modelo',label:'Referencia',type:'select',options:refOptions(REF_MODELS.zener),apply:refApply(REF_MODELS.zener)},
@@ -2826,7 +2895,13 @@ document.getElementById('btnDelete').addEventListener('click', ()=>{
 
 const btnWire = document.getElementById('btnWire');
 btnWire.addEventListener('click', ()=>{
-  wireMode = !wireMode; wireStart=null; selectedType=null; selectComponent(null);
+  wireMode = !wireMode; cutMode=false; wireStart=null; selectedType=null; selectComponent(null);
+  updatePlacingChip(); closePicker();
+  updateModeUI();
+});
+const btnCutWire = document.getElementById('btnCutWire');
+btnCutWire.addEventListener('click', ()=>{
+  cutMode = !cutMode; wireMode=false; wireStart=null; selectedType=null; selectComponent(null);
   updatePlacingChip(); closePicker();
   updateModeUI();
 });
@@ -2847,7 +2922,8 @@ document.getElementById('btnClear').addEventListener('click', ()=>{
 });
 function updateModeUI(){
   btnWire.classList.toggle('on', wireMode);
-  document.getElementById('hint').style.display = (comps.length===0 && !wireMode && !selectedType)? 'block':'none';
+  btnCutWire.classList.toggle('on', cutMode);
+  document.getElementById('hint').style.display = (comps.length===0 && !wireMode && !cutMode && !selectedType)? 'block':'none';
 }
 
 // ============================================================
@@ -3241,6 +3317,7 @@ function updateStatus(){
   const nComps = comps.length, nWires = wires.length;
   let html = `<div class="chip">Componentes: <b>${nComps}</b></div><div class="chip">Cables: <b>${nWires}</b></div>`;
   html += `<div class="chip">Estado: <b>${sim.powered? 'ENCENDIDO':'apagado'}</b></div>`;
+  if(cutMode) html += `<div class="chip" style="color:var(--danger);border-color:var(--danger);">✂ Toca un cable para eliminarlo</div>`;
   if(sim.powered) html += `<div class="chip">Corriente total: <b>${fmtAmp(sim.totalCurrent||0)}</b></div>`;
   bar.innerHTML = html;
 }
