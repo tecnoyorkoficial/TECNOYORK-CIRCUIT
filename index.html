@@ -1588,30 +1588,50 @@ opamp: { label:'Amplificador Operacional', cat:'Módulos', icon:'▷OP', props:{
   }
 },
 
-arduino: { label:'Arduino Nano', cat:'Módulos', icon:'MCU', props:{Vcc:5, modeD2:'OUT', valD2:'0', modeD3:'OUT', valD3:'0', pwmD5:0.5},
-  terminals:[T(-30,-20,'D2'), T(-30,0,'D3'), T(-30,20,'D5'), T(30,-20,'A0'), T(30,0,'VIN'), T(30,20,'GND')],
+arduino: { label:'Arduino Uno/Nano (programable)', cat:'Módulos', icon:'MCU', props:{Vcc:5, code:''},
+  terminals:[
+    T(-70,-91,'D0'),T(-70,-77,'D1'),T(-70,-63,'D2'),T(-70,-49,'D3~'),T(-70,-35,'D4'),
+    T(-70,-21,'D5~'),T(-70,-7,'D6~'),T(-70,7,'D7'),T(-70,21,'D8'),T(-70,35,'D9~'),
+    T(-70,49,'D10~'),T(-70,63,'D11~'),T(-70,77,'D12'),T(-70,91,'D13'),
+    T(70,-80,'A0'),T(70,-60,'A1'),T(70,-40,'A2'),T(70,-20,'A3'),T(70,0,'A4'),
+    T(70,20,'A5'),T(70,40,'VIN'),T(70,60,'5V'),T(70,80,'GND')
+  ],
   edges(c){
-    const vin = c.state.Vt4 || 0;
-    if(vin < 4.0) return [];
-    const e=[];
-    if(c.props.modeD2==='OUT') e.push({n:[0,'GND'], type:'V', value:c.props.valD2==='1'?c.props.Vcc:0, Rint:5});
-    if(c.props.modeD3==='OUT') e.push({n:[1,'GND'], type:'V', value:c.props.valD3==='1'?c.props.Vcc:0, Rint:5});
-    e.push({n:[2,'GND'], type:'V', value:c.props.pwmD5*c.props.Vcc, Rint:5});
+    c.state.pins = c.state.pins || defaultArdPins();
+    const idx = ARD_PIN_INDEX;
+    const e = [{n:[idx.GND,'GND'], type:'R', value:0.001}];
+    e.push({n:[idx['5V'],'GND'], type:'V', value:c.props.Vcc, Rint:5});
+    for(let i=0;i<=13;i++){
+      const key='D'+i, st=c.state.pins[key];
+      if(!st) continue;
+      if(st.mode==='OUT') e.push({n:[idx[key],'GND'], type:'V', value: st.out? c.props.Vcc:0, Rint:8});
+      else if(st.mode==='PWM') e.push({n:[idx[key],'GND'], type:'V', value:(st.duty||0)*c.props.Vcc, Rint:8});
+      else if(st.mode==='INPUT_PULLUP') e.push({n:[idx[key],'GND'], type:'V', value:c.props.Vcc, Rint:20000});
+    }
     return e;
   },
   step(c,dt,sim){
-    c.state.A0 = c.state.Vt3||0;
+    c.state.pins = c.state.pins || defaultArdPins();
+    if(sim.powered && c.state.program && c.state.program.running) pumpArduinoProgram(c,dt);
   },
   draw(ctx,c){
-    leadLines(ctx,[[-30,-20],[-14,-20]]); leadLines(ctx,[[-30,0],[-14,0]]); leadLines(ctx,[[-30,20],[-14,20]]);
-    leadLines(ctx,[[30,-20],[14,-20]]); leadLines(ctx,[[30,0],[14,0]]); leadLines(ctx,[[30,20],[14,20]]);
-    ctx.strokeStyle='#4da6ff'; ctx.lineWidth=2; ctx.strokeRect(-14,-26,28,52);
-    ctx.fillStyle='#aab6c4'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('MCU',0,2);
-    ctx.font='7px sans-serif';
-    ctx.fillText('D2',-24,-16); ctx.fillText('D3',-24,4); ctx.fillText('D5',-24,24);
-    ctx.fillText('A0',24,-16); ctx.fillText('Vin',22,4); ctx.fillText('GND',22,24);
-    ctx.fillStyle='#e7edf5'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('A0 '+fmtVolt(c.state?.A0||0),0,36);
+    const p = c.state.program;
+    const running = p && p.running && !p.error;
+    const err = p && p.error;
+    c.terminals.forEach(t=>{ leadLines(ctx,[[t.x,t.y],[t.x<0? t.x+14:t.x-14, t.y]]); });
+    ctx.strokeStyle= running? '#4da6ff' : (err? '#ff5c5c':'#3a4756'); ctx.lineWidth=2;
+    ctx.strokeRect(-56,-98,112,196);
+    ctx.fillStyle='rgba(30,40,55,.5)'; ctx.fillRect(-56,-98,112,196);
+    ctx.fillStyle='#aab6c4'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('ARDUINO',0,-84);
+    ctx.font='6.5px sans-serif';
+    c.terminals.forEach(t=>{
+      ctx.textAlign = t.x<0? 'left':'right';
+      ctx.fillText(t.name||'', t.x<0? -52:52, t.y+2.5);
+    });
+    ctx.textAlign='center'; ctx.font='7.5px sans-serif';
+    ctx.fillStyle = running? '#39d3a8' : (err? '#ff5c5c' : '#8a97a8');
+    ctx.fillText(running? '▶ ejecutando' : (err? '⚠ error de código' : '⏸ sin programa cargado'), 0, 112);
   }
 },
 
@@ -1894,6 +1914,231 @@ function resistorColorBands(R){
   let s=R.toExponential(1);
   let [mant,exp]=s.split('e'); let d1=mant[0], d2=mant[2]||'0'; let mult=parseInt(exp);
   return [colors[+d1], colors[+d2], colors[Math.max(0,Math.min(9,mult))]];
+}
+
+// ============================================================
+// ARDUINO PROGRAMABLE — pines, transpilador y planificador
+// ============================================================
+const ARD_PIN_INDEX = {
+  D0:0,D1:1,D2:2,D3:3,D4:4,D5:5,D6:6,D7:7,D8:8,D9:9,D10:10,D11:11,D12:12,D13:13,
+  A0:14,A1:15,A2:16,A3:17,A4:18,A5:19,VIN:20,'5V':21,GND:22
+};
+const ARD_PWM_PINS = new Set([3,5,6,9,10,11]);
+const DEFAULT_ARD_SKETCH =
+`void setup(){
+  pinMode(13, OUTPUT);
+}
+
+void loop(){
+  digitalWrite(13, HIGH);
+  delay(500);
+  digitalWrite(13, LOW);
+  delay(500);
+}`;
+
+function defaultArdPins(){
+  const pins={};
+  for(let i=0;i<=13;i++) pins['D'+i] = {mode:'IN', out:0, duty:0};
+  return pins;
+}
+
+// Convierte un sketch estilo Arduino (C/C++) a JavaScript con generadores,
+// de modo que delay() pueda "pausar" sin congelar la simulación.
+function transpileArduino(src){
+  let s = String(src||'');
+  s = s.replace(/^\s*#include\s*[<"].*[>"]\s*$/gm,'');
+  s = s.replace(/^\s*#define\s+(\w+)\s+(.+)$/gm,'const $1 = $2;');
+  s = s.replace(/^\s*#.*$/gm,'');
+  const TYPE = '(?:void|int|float|double|long|unsigned\\s+long|unsigned\\s+int|byte|char|bool|boolean|String)';
+  const fnNames = [];
+  s = s.replace(new RegExp(TYPE+'\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*\\{','g'), (m,name,params)=>{
+    fnNames.push(name);
+    const cp = params.split(',').map(p=>{
+      p=p.trim(); if(!p) return '';
+      return p.replace(new RegExp('^'+TYPE+'\\s*[\\*&]?\\s*'),'').trim();
+    }).filter(Boolean).join(', ');
+    return 'function* '+name+'('+cp+'){';
+  });
+  s = s.replace(new RegExp('\\b(const\\s+)?('+TYPE+')\\s+(\\w+)\\b','g'), (m,cst,typ,name)=> (cst? cst : 'let ') + name);
+  s = s.replace(/\blet (\w+)\[\]\s*=\s*\{([^}]*)\}/g,'let $1 = [$2]');
+  s = s.replace(/\blet (\w+)\[(\d+)\]\s*;/g,'let $1 = new Array($2).fill(0);');
+  s = s.replace(/\bdelayMicroseconds\s*\(/g,'yield* $delayMicros(');
+  s = s.replace(/\bdelay\s*\(/g,'yield* $delay(');
+  fnNames.forEach(name=>{
+    if(name==='setup'||name==='loop') return;
+    const re = new RegExp('(?<!function\\*\\s)\\b'+name+'\\s*\\(','g');
+    s = s.replace(re,'yield* '+name+'(');
+  });
+  return s;
+}
+
+function ardPinKey(pin){ return (typeof pin==='string')? pin : ('D'+pin); }
+
+function buildArduinoCtx(c){
+  const idx = ARD_PIN_INDEX;
+  function ensurePin(key){
+    c.state.pins = c.state.pins || defaultArdPins();
+    if(!c.state.pins[key]) c.state.pins[key] = {mode:'IN', out:0, duty:0};
+    return c.state.pins[key];
+  }
+  const ctx = {
+    HIGH:1, LOW:0, INPUT:0, OUTPUT:1, INPUT_PULLUP:2, LED_BUILTIN:13,
+    A0:'A0',A1:'A1',A2:'A2',A3:'A3',A4:'A4',A5:'A5',
+    pinMode(pin, mode){
+      const key=ardPinKey(pin); const st=ensurePin(key);
+      st.mode = mode===1? 'OUT' : mode===2? 'INPUT_PULLUP' : 'IN';
+    },
+    digitalWrite(pin, val){
+      const key=ardPinKey(pin); const st=ensurePin(key);
+      if(st.mode!=='OUT' && st.mode!=='PWM') st.mode='OUT';
+      st.out = val? 1:0;
+    },
+    digitalRead(pin){
+      const key=ardPinKey(pin); const st=ensurePin(key);
+      if(st.mode==='OUT') return st.out;
+      const v = c.state['Vt'+idx[key]]||0;
+      return v > c.props.Vcc/2 ? 1:0;
+    },
+    analogRead(pin){
+      const key = ardPinKey(pin);
+      if(idx[key]===undefined || key[0]!=='A') return 0;
+      const v = c.state['Vt'+idx[key]]||0;
+      return Math.max(0, Math.min(1023, Math.round(v/c.props.Vcc*1023)));
+    },
+    analogWrite(pin, val){
+      const num = typeof pin==='string'? parseInt(pin.replace('D',''),10): pin;
+      const key = ardPinKey(pin);
+      if(!ARD_PWM_PINS.has(num)){ ctx.digitalWrite(pin, val>=128?1:0); return; }
+      const st = ensurePin(key);
+      st.mode='PWM'; st.duty = Math.max(0,Math.min(255,val))/255;
+    },
+    millis(){ return Math.floor((c.state.program&&c.state.program.virtualMillis)||0); },
+    micros(){ return Math.floor(((c.state.program&&c.state.program.virtualMillis)||0)*1000); },
+    map(x,inMin,inMax,outMin,outMax){ return (x-inMin)*(outMax-outMin)/((inMax-inMin)||1)+outMin; },
+    constrain(x,a,b){ return Math.max(a,Math.min(b,x)); },
+    random(a,b){ if(b===undefined){ b=a; a=0; } return Math.floor(Math.random()*(b-a))+a; },
+    Serial:{
+      begin(){},
+      print(...args){ appendArdSerial(c, args.map(String).join('')); },
+      println(...args){ appendArdSerial(c, args.map(String).join('')+'\n'); },
+      available(){ return 0; },
+      read(){ return -1; }
+    },
+    *$delay(ms){
+      const start = c.state.program.virtualMillis;
+      while(c.state.program && (c.state.program.virtualMillis-start) < ms){ yield; }
+    },
+    *$delayMicros(us){
+      const start = c.state.program.virtualMillis;
+      const ms = us/1000;
+      while(c.state.program && (c.state.program.virtualMillis-start) < ms){ yield; }
+    }
+  };
+  return ctx;
+}
+
+function appendArdSerial(c, text){
+  const p = c.state.program; if(!p) return;
+  p.serialLog = (p.serialLog||'') + text;
+  if(p.serialLog.length>4000) p.serialLog = p.serialLog.slice(-4000);
+}
+
+function compileArduinoProgram(c, code){
+  try{
+    const jsBody = transpileArduino(code);
+    const ctx = buildArduinoCtx(c);
+    const factorySrc =
+      'return function(ctx){\n'+
+      '  const {HIGH,LOW,INPUT,OUTPUT,INPUT_PULLUP,LED_BUILTIN,A0,A1,A2,A3,A4,A5,'+
+      '    pinMode,digitalWrite,digitalRead,analogRead,analogWrite,'+
+      '    millis,micros,map,constrain,random,Serial,$delay,$delayMicros} = ctx;\n'+
+      jsBody+'\n'+
+      '  return { setupGen: (typeof setup==="function")?setup:function*(){}, loopGen: (typeof loop==="function")?loop:function*(){} };\n'+
+      '};';
+    const factory = new Function(factorySrc)();
+    const built = factory(ctx);
+    c.state.pins = defaultArdPins();
+    c.state.program = {
+      code, error:null, running:true, virtualMillis:0, phase:'setup',
+      iterSetup:null, iterLoop:null, serialLog:'', compiled:built
+    };
+    return {ok:true};
+  }catch(err){
+    c.state.program = c.state.program||{};
+    c.state.program.error = (err && err.message) || String(err);
+    c.state.program.running = false;
+    return {ok:false, error: c.state.program.error};
+  }
+}
+
+function pumpArduinoProgram(c, dt){
+  const p = c.state.program;
+  if(!p || !p.compiled || p.error || !p.running) return;
+  p.virtualMillis += dt*1000;
+  let guard=0;
+  while(guard++<2000){
+    if(p.phase==='setup'){
+      if(!p.iterSetup) p.iterSetup = p.compiled.setupGen();
+      let r;
+      try{ r = p.iterSetup.next(); }
+      catch(err){ p.error=(err&&err.message)||String(err); p.running=false; return; }
+      if(r.done){ p.phase='loop'; p.iterLoop=null; } else break;
+    } else if(p.phase==='loop'){
+      if(!p.iterLoop) p.iterLoop = p.compiled.loopGen();
+      let r;
+      try{ r = p.iterLoop.next(); }
+      catch(err){ p.error=(err&&err.message)||String(err); p.running=false; return; }
+      if(r.done){ p.iterLoop=null; } else break;
+    } else break;
+  }
+}
+
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function openArduinoEditor(c){
+  const initialCode = c.props.code || DEFAULT_ARD_SKETCH;
+  const html = `
+    <div style="padding:4px 2px;">
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 8px;">Sketch estilo Arduino (setup/loop). Pines digitales 0–13 (PWM en 3,5,6,9,10,11). Analógicos A0–A5.</p>
+      <textarea id="ardCode" style="width:100%;height:220px;background:#0d1219;color:#e7edf5;border:1px solid var(--border);border-radius:8px;padding:8px;font-family:monospace;font-size:12px;box-sizing:border-box;" spellcheck="false">${escapeHtml(initialCode)}</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+        <button class="tbtn on" id="ardRun">▶ Cargar y ejecutar</button>
+        <button class="tbtn danger" id="ardStop">⏹ Detener</button>
+        <button class="tbtn" id="ardExample">Ejemplo: Blink</button>
+      </div>
+      <div id="ardStatus" style="margin-top:8px;font-size:12px;"></div>
+      <label style="display:block;margin-top:10px;font-size:12px;color:var(--text-dim);">Monitor Serie</label>
+      <pre id="ardSerial" style="background:#0d1219;border:1px solid var(--border);border-radius:8px;padding:8px;height:100px;overflow:auto;font-size:11px;margin:4px 0 0;white-space:pre-wrap;"></pre>
+    </div>`;
+  openOverlay('💻 Programar '+c.id, html);
+  const codeEl = document.getElementById('ardCode');
+  const statusEl = document.getElementById('ardStatus');
+  const p = c.state.program;
+  if(p && p.error){ statusEl.textContent='❌ '+p.error; statusEl.style.color='#ff5c5c'; }
+  else if(p && p.running){ statusEl.textContent='✅ Programa en ejecución.'; statusEl.style.color='#39d3a8'; }
+  document.getElementById('ardRun').addEventListener('click', ()=>{
+    c.props.code = codeEl.value;
+    const res = compileArduinoProgram(c, codeEl.value);
+    statusEl.textContent = res.ok? '✅ Programa cargado y ejecutándose.' : ('❌ '+res.error);
+    statusEl.style.color = res.ok? '#39d3a8':'#ff5c5c';
+  });
+  document.getElementById('ardStop').addEventListener('click', ()=>{
+    if(c.state.program) c.state.program.running=false;
+    statusEl.textContent='⏹ Detenido.'; statusEl.style.color='var(--text-dim)';
+  });
+  document.getElementById('ardExample').addEventListener('click', ()=>{ codeEl.value = DEFAULT_ARD_SKETCH; });
+  pollArdSerial(c);
+}
+
+function pollArdSerial(c){
+  const timer = setInterval(()=>{
+    if(!overlayModal.classList.contains('open')){ clearInterval(timer); return; }
+    const el = document.getElementById('ardSerial');
+    if(!el){ clearInterval(timer); return; }
+    const p = c.state.program;
+    el.textContent = p? (p.serialLog||'') : '';
+    el.scrollTop = el.scrollHeight;
+  }, 300);
 }
 
 const CATEGORIES = ['Fuentes','Pasivos','Control','Semiconductores','Salida','Sensores','Medición','Lógica','Módulos'];
@@ -2237,11 +2482,20 @@ function termAbs(c, idx){
 }
 function snap(v){ return Math.round(v/GRID)*GRID; }
 
+function compHalfExtent(c){
+  let w=44,h=38;
+  if(c.terminals && c.terminals.length){
+    w = Math.max(w, Math.max(...c.terminals.map(t=>Math.abs(t.x)))+8);
+    h = Math.max(h, Math.max(...c.terminals.map(t=>Math.abs(t.y)))+8);
+  }
+  return {w,h};
+}
 function hitComponent(x,y){
   for(let i=comps.length-1;i>=0;i--){
     const c=comps[i]; const dx=x-c.x, dy=y-c.y;
     const rr = rotPt(dx,dy,-c.rot);
-    if(Math.abs(rr.x)<44 && Math.abs(rr.y)<38) return c;
+    const ext = compHalfExtent(c);
+    if(Math.abs(rr.x)<ext.w && Math.abs(rr.y)<ext.h) return c;
   }
   return null;
 }
@@ -2437,7 +2691,14 @@ function renderProps(c){
       html += `<label>${f.label}</label><input type="number" step="${f.step||1}" value="${c.props[f.key]}" data-key="${f.key}">`;
     }
   });
+  if(c.type==='arduino'){
+    html += `<button class="tbtn on" id="btnArdProgram" style="width:100%;margin-top:10px;">💻 Programar Arduino</button>`;
+  }
   propPanel.innerHTML = html;
+  if(c.type==='arduino'){
+    const btn = document.getElementById('btnArdProgram');
+    if(btn) btn.addEventListener('click', ()=> openArduinoEditor(c));
+  }
   propPanel.querySelectorAll('input').forEach(inp=>{
     inp.addEventListener('input', ()=>{
       const key=inp.dataset.key; const val=parseFloat(inp.value);
@@ -2533,14 +2794,7 @@ function propFieldsFor(type){
       {key:'Vcc_pos',label:'V+ rail (V)',step:0.5},
       {key:'Vcc_neg',label:'V- rail (V)',step:0.5}
     ],
-    arduino:[
-      {key:'Vcc',label:'Vcc (V)',step:0.5},
-      {key:'modeD2',label:'Modo D2',type:'select',options:[{value:'OUT',label:'Salida'},{value:'IN',label:'Entrada'}]},
-      {key:'valD2',label:'Valor D2',type:'select',options:[{value:'0',label:'LOW'},{value:'1',label:'HIGH'}]},
-      {key:'modeD3',label:'Modo D3',type:'select',options:[{value:'OUT',label:'Salida'},{value:'IN',label:'Entrada'}]},
-      {key:'valD3',label:'Valor D3',type:'select',options:[{value:'0',label:'LOW'},{value:'1',label:'HIGH'}]},
-      {key:'pwmD5',label:'PWM D5 (duty)',type:'range'}
-    ],
+    arduino:[{key:'Vcc',label:'Vcc (V)',step:0.5}],
     dcdc:[{key:'Vset',label:'Vout objetivo (V)',step:0.5},{key:'eta',label:'Eficiencia η',type:'range'}],
     servo:[{key:'Vcc',label:'Vcc (V)',step:0.5}],
     xl4015: [{key:'Vset',label:'Vout objetivo (V)',step:0.5},{key:'eta',label:'Eficiencia η',type:'range'}],
