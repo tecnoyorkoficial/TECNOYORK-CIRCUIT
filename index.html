@@ -3,7 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>CircuitLab — Simulador de Circuitos</title>
+<title>Tecnoyork Electrónica</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b0f14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tecnoyork">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
   :root{
     --bg:#0b0f14; --panel:#121821; --panel2:#161e2a; --grid:#1c2530;
@@ -137,7 +147,7 @@
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="logo">⚡Circuit<span>Lab</span></div>
+    <div class="logo">⚡Tecnoyork<span> Electrónica</span></div>
     <button class="tbtn" id="btnAddComp">➕ Componentes</button>
     <button class="tbtn" id="btnWire">🔌 Cable</button>
     <button class="tbtn" id="btnEnv">🌡️ Entorno</button>
@@ -3006,6 +3016,15 @@ updateModeUI();
 updatePlacingChip();
 requestAnimationFrame(loop);
 
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js')
+        .catch(err => console.warn('No se pudo registrar el service worker:', err));
+    });
+  }
 </script>
 </body>
 </html>
