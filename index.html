@@ -1015,9 +1015,11 @@ active_buzzer: { label:'Zumbador activo (con oscilador)', cat:'Salida', icon:'�
 
 comparator: { label:'Comparador (LM393)', cat:'Lógica', icon:'CMP', props:{Vcc:5},
   terminals:[T(-40,-15,'in+'),T(-40,15,'in-'),T(40,0,'out')],
+  // Salida real open-collector: transistor interno conduce a GND cuando in- > in+,
+  // y queda en alta impedancia (flotando) cuando in+ > in- — necesita pull-up externo.
   edges(c){
-    const out = (c.state?.Vt0||0) > (c.state?.Vt1||0);
-    return [{n:[2,'GND'], type:'GATEOUT', value: out? c.props.Vcc:0, tag:'gate', Rint:10}];
+    const highSide = (c.state?.Vt0||0) > (c.state?.Vt1||0);
+    return [{n:[2,'GND'], type: highSide? 'OPEN':'R', value: highSide? 1e9 : 15}];
   },
   draw(ctx,c){
     leadLines(ctx,[[-40,-15],[-16,-15]]); leadLines(ctx,[[-40,15],[-16,15]]); leadLines(ctx,[[16,0],[40,0]]);
@@ -1025,6 +1027,7 @@ comparator: { label:'Comparador (LM393)', cat:'Lógica', icon:'CMP', props:{Vcc:
     ctx.beginPath(); ctx.moveTo(-16,-20); ctx.lineTo(-16,20); ctx.lineTo(16,0); ctx.closePath(); ctx.stroke();
     ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='left';
     ctx.fillText('+',-13,-11); ctx.fillText('−',-13,17);
+    ctx.font='6.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('(usar pull-up)',0,30);
   }
 },
 
@@ -1054,7 +1057,11 @@ mosfet_n: { label:'MOSFET Canal N', cat:'Semiconductores', icon:'N-MOS', props:{
   edges(c){
     const Vgs = (c.state?.Vt0||0)-(c.state?.Vt2||0);
     const on = Vgs > c.props.Vgs_th;
-    return [{n:[1,2], type: on?'R':'OPEN', value:c.props.Ron}];
+    // Diodo de cuerpo intrínseco: conduce fuente→drenador (flyback) aunque el gate esté apagado.
+    return [
+      {n:[1,2], type: on?'R':'OPEN', value:c.props.Ron},
+      {n:[2,1], type:'DIODE', value:0.7, Ron:5, tag:'body'}
+    ];
   },
   draw(ctx,c){
     leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,-10],[20,-34]]); leadLines(ctx,[[14,10],[20,34]]);
@@ -1072,7 +1079,11 @@ mosfet_p: { label:'MOSFET Canal P', cat:'Semiconductores', icon:'P-MOS', props:{
   edges(c){
     const Vsg = (c.state?.Vt1||0)-(c.state?.Vt0||0);
     const on = Vsg > c.props.Vgs_th;
-    return [{n:[1,2], type: on?'R':'OPEN', value:c.props.Ron}];
+    // Diodo de cuerpo intrínseco: conduce drenador→fuente aunque el gate esté apagado.
+    return [
+      {n:[1,2], type: on?'R':'OPEN', value:c.props.Ron},
+      {n:[2,1], type:'DIODE', value:0.7, Ron:5, tag:'body'}
+    ];
   },
   draw(ctx,c){
     leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,-10],[20,-34]]); leadLines(ctx,[[14,10],[20,34]]);
@@ -1330,7 +1341,11 @@ igbt: { label:'IGBT (potencia)', cat:'Semiconductores', icon:'IGBT', props:{Vge_
   edges(c){
     const Vge = (c.state?.Vt0||0)-(c.state?.Vt2||0);
     const on = Vge > c.props.Vge_th;
-    return [{n:[1,2], type: on?'R':'OPEN', value:c.props.Ron}];
+    // Muchos IGBT de potencia vienen co-empaquetados con un diodo volante (freewheeling).
+    return [
+      {n:[1,2], type: on?'R':'OPEN', value:c.props.Ron},
+      {n:[2,1], type:'DIODE', value:0.7, Ron:5, tag:'body'}
+    ];
   },
   draw(ctx,c){
     leadLines(ctx,[[-40,0],[-14,0]]); leadLines(ctx,[[14,-10],[20,-34]]); leadLines(ctx,[[14,10],[20,34]]);
@@ -1345,14 +1360,20 @@ igbt: { label:'IGBT (potencia)', cat:'Semiconductores', icon:'IGBT', props:{Vge_
 },
 
 lm35: { label:'Sensor de temperatura LM35', cat:'Sensores', icon:'🌡V', props:{temp:0.3, Vmax:1.5},
-  terminals:[T(-40,0,'GND'),T(40,0,'Vout')],
-  edges(c){ return [{n:[0,1], type:'V', value:Math.max(0,c.props.temp*c.props.Vmax), Rint:2}]; },
+  terminals:[T(-40,0,'GND'),T(40,0,'Vout'),T(0,-20,'VCC')],
+  edges(c){
+    const vccV = (c.state.Vt2||0)-(c.state.Vt0||0);
+    if(vccV < 3.0) return [{n:[0,1], type:'OPEN', value:1e9}];
+    return [{n:[0,1], type:'V', value:Math.max(0,c.props.temp*c.props.Vmax), Rint:2}];
+  },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]); leadLines(ctx,[[0,-20],[0,-12]]);
+    const powered = ((c.state.Vt2||0)-(c.state.Vt0||0)) >= 3.0;
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(-16,-12); ctx.lineTo(16,-12); ctx.lineTo(16,12); ctx.lineTo(-16,12); ctx.closePath(); ctx.stroke();
     ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('LM35',0,3);
-    ctx.font='7.5px sans-serif'; ctx.fillText((c.props.temp*100).toFixed(0)+'°C→'+(c.props.temp*c.props.Vmax).toFixed(2)+'V',0,26);
+    ctx.font='7.5px sans-serif';
+    ctx.fillText(powered? (c.props.temp*100).toFixed(0)+'°C→'+(c.props.temp*c.props.Vmax).toFixed(2)+'V' : 'sin VCC',0,26);
   }
 },
 
@@ -1382,13 +1403,19 @@ piezo_sensor: { label:'Sensor piezoeléctrico (vibración)', cat:'Sensores', ico
 },
 
 distance_sensor: { label:'Sensor de distancia (IR)', cat:'Sensores', icon:'📏', props:{distance:0.3, Vmax:3.3},
-  terminals:[T(-40,0,'GND'),T(40,0,'Vout')],
-  edges(c){ const v = c.props.Vmax*Math.pow(1-c.props.distance,1.4); return [{n:[0,1],type:'V',value:Math.max(0,v), Rint:2}]; },
+  terminals:[T(-40,0,'GND'),T(40,0,'Vout'),T(0,-18,'VCC')],
+  edges(c){
+    const vccV = (c.state.Vt2||0)-(c.state.Vt0||0);
+    if(vccV < 3.0) return [{n:[0,1], type:'OPEN', value:1e9}];
+    const v = c.props.Vmax*Math.pow(1-c.props.distance,1.4);
+    return [{n:[0,1],type:'V',value:Math.max(0,v), Rint:2}];
+  },
   draw(ctx,c){
-    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]); leadLines(ctx,[[0,-18],[0,-10]]);
+    const powered = ((c.state.Vt2||0)-(c.state.Vt0||0)) >= 3.0;
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-18,-10,36,20);
     ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('IR',0,3);
-    ctx.font='8px sans-serif'; ctx.fillText('d '+Math.round(c.props.distance*100)+'%',0,24);
+    ctx.font='8px sans-serif'; ctx.fillText(powered? 'd '+Math.round(c.props.distance*100)+'%' : 'sin VCC',0,24);
   }
 },
 
@@ -1535,7 +1562,9 @@ rgb_led: { label:'LED RGB (cátodo común)', cat:'Salida', icon:'◉', props:{Vf
 },
 
 timer555: { label:'Timer 555', cat:'Módulos', icon:'555', props:{mode:'astable', Vcc:5, R1:1000, R2:1000, C:1},
-  terminals:[T(-30,-20,'VCC'), T(-30,0,'TRIG'), T(-30,20,'RESET'), T(30,-20,'THRES'), T(30,0,'OUT'), T(30,20,'GND')],
+  // Nota: el pin DISCHARGE se añade como indicador (misma fase que OUT en astable);
+  // la temporización sigue calculándose con R1/R2/C internos, no con una red RC externa real.
+  terminals:[T(-30,-20,'VCC'), T(-30,0,'TRIG'), T(-30,20,'RESET'), T(30,-20,'THRES'), T(30,0,'OUT'), T(30,20,'GND'), T(0,34,'DISCH')],
   step(c, dt, sim){
     const Vcc_actual = c.state.Vt0 || 0;
     if(Vcc_actual < 3.0) { c.state.outHigh = false; return; }
@@ -1557,15 +1586,19 @@ timer555: { label:'Timer 555', cat:'Módulos', icon:'555', props:{mode:'astable'
       c.state.freq = f;
     }
   },
-  edges(c,sim){
+ edges(c,sim){
     const Vcc_actual = c.state.Vt0 || 0;
-    if(Vcc_actual < 3.0) return [{n:[4,'GND'], type:'OPEN', value:1e9}];
+    if(Vcc_actual < 3.0) return [{n:[4,'GND'], type:'OPEN', value:1e9},{n:[6,'GND'], type:'OPEN', value:1e9}];
     const V = c.state.outHigh? c.props.Vcc : 0;
-    return [{n:[4,'GND'], type:'V', value:V, Rint:5}];
+    // DISCHARGE es open-collector: en el 555 real conduce a GND cuando OUT está bajo.
+    return [
+      {n:[4,'GND'], type:'V', value:V, Rint:5},
+      {n:[6,'GND'], type: c.state.outHigh? 'OPEN':'R', value: c.state.outHigh? 1e9:20}
+    ];
   },
   draw(ctx,c){
     leadLines(ctx,[[-30,-20],[-14,-20]]); leadLines(ctx,[[-30,0],[-14,0]]); leadLines(ctx,[[-30,20],[-14,20]]);
-    leadLines(ctx,[[30,-20],[14,-20]]); leadLines(ctx,[[30,0],[14,0]]); leadLines(ctx,[[30,20],[14,20]]);
+    leadLines(ctx,[[30,-20],[14,-20]]); leadLines(ctx,[[30,0],[14,0]]); leadLines(ctx,[[30,20],[14,20]]); leadLines(ctx,[[0,34],[0,24]]);
     ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-14,-24,28,48);
     ctx.fillStyle='#aab6c4'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('555',0,3);
     ctx.font='7.5px sans-serif';
@@ -1587,8 +1620,8 @@ opamp: { label:'Amplificador Operacional', cat:'Módulos', icon:'▷OP', props:{
     const v_in_p = c.state.Vt1||0;
     const v_in_m = c.state.Vt0||0;
     let vout = c.props.gain * (v_in_p - v_in_m);
-    const hi = Math.max(c.props.Vcc_pos, c.props.Vcc_neg);
-    const lo = Math.min(c.props.Vcc_pos, c.props.Vcc_neg);
+   const hi = Math.max(vcc_actual, vee_actual);
+    const lo = Math.min(vcc_actual, vee_actual);
     if(vout > hi) vout = hi; else if(vout < lo) vout = lo;
     c.state.Vout = vout;
     return [{n:[4,'GND'], type:'V', value:vout, Rint:2}];
@@ -2343,7 +2376,8 @@ class CircuitSim{
       else if(e.tag==='led') c.state.Iled = Math.abs(I);
       else if(e.tag==='main' || e.tag==='meter' || e.tag===undefined){ c.state.I = I; c.state.V = Vn1-Vn2; }
       else { c.state['I_'+e.tag] = I; c.state['V_'+e.tag] = Vn1-Vn2; }
- if(c.type==='battery' || c.type==='acsource') this.totalCurrent = Math.max(this.totalCurrent, Math.abs(I));
+ const FUENTES = ['battery','acsource','solar_panel','coin_cell','aa_battery','usb_port','current_source','thermocouple'];
+        if(FUENTES.includes(c.type)) this.totalCurrent = Math.max(this.totalCurrent, Math.abs(I));
     });
     comps.forEach(c=>{ const def=DEF(c); if(def.postSolve) def.postSolve(c); });
   }
@@ -2907,7 +2941,14 @@ btnCutWire.addEventListener('click', ()=>{
 });
 const btnPower = document.getElementById('btnPower');
 document.getElementById('btnCenter').addEventListener('click', ()=>{
-  panX = 0; panY = 0;
+  if(!comps.length){ panX = 0; panY = 0; return; }
+  const xs = comps.map(c=>c.x), ys = comps.map(c=>c.y);
+  const cx = (Math.min(...xs)+Math.max(...xs))/2;
+  const cy = (Math.min(...ys)+Math.max(...ys))/2;
+  const r = wrap.getBoundingClientRect();
+  panX = r.width/2 - cx;
+  panY = r.height/2 - cy;
+  clampPan();
 });
 btnPower.addEventListener('click', ()=>{
   sim.powered = !sim.powered;
@@ -3327,6 +3368,12 @@ function loop(now){
   const dt = Math.min(0.05,(now-lastT)/1000); lastT=now;
   particlePhase += dt;
   sim.step(comps, wires, dt);
+  comps.forEach(c=>{
+    if(COMPONENTS[c.type] && COMPONENTS[c.type].momentary && c.props.pressed){
+      c.state._momT = (c.state._momT||0) + dt;
+      if(c.state._momT > 0.25){ c.props.pressed = false; c.state._momT = 0; }
+    }
+  });
   
   if (scopeActive) {
      const ch1CompId = document.getElementById('scopeCh1Comp')?.value;
@@ -3362,6 +3409,2493 @@ requestAnimationFrame(loop);
 
 </script>
 
+<script>
+ // ============================================================
+// nuevos-componentes.js — Paquete adicional Tecnoyork Electrónica
+// Pega este <script> completo DESPUÉS del 
+(function(){
+
+// ---- pequeñas utilidades de animación reutilizadas abajo ----
+function lerp(a,b,t){ return a+(b-a)*t; }
+function clamp01(v){ return Math.max(0,Math.min(1,v)); }
+
+const NUEVOS = {
+
+// ---------------------------------------------------------------
+// 1) SENSOR ULTRASÓNICO (HC-SR04) — Sensores
+// ---------------------------------------------------------------
+ultrasonic_sensor: { label:'Sensor Ultrasónico (HC-SR04)', cat:'Sensores', icon:')))', props:{distance:0.3, Vcc:5},
+  terminals:[T(-30,-20,'VCC'),T(-30,20,'GND'),T(30,-20,'TRIG'),T(30,20,'ECHO')],
+  edges(c){
+    const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vccV < 3.0) return [{n:[3,1], type:'OPEN', value:1e9}];
+    const v = c.props.Vcc * (1 - c.props.distance);
+    return [{n:[3,1], type:'V', value:Math.max(0,v), Rint:5}];
+  },
+  draw(ctx,c,sim){
+    c.terminals.forEach(t=> leadLines(ctx,[[t.x,t.y],[t.x<0? t.x+14:t.x-14, t.y]]));
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-28,-16,56,32);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('HC-SR04',0,-2);
+    const powered = ((c.state.Vt0||0)-(c.state.Vt1||0)) >= 3.0;
+    [-12,12].forEach(ex=>{
+      ctx.beginPath(); ctx.arc(ex,6,7,0,Math.PI*2); ctx.strokeStyle='#556274'; ctx.lineWidth=1.4; ctx.stroke();
+      if(powered){
+        for(let i=0;i<3;i++){
+          const ph = ((sim.simTime*1.2 + i/3) % 1);
+          const r = 7 + ph*16;
+          ctx.beginPath(); ctx.arc(ex,6,r,0,Math.PI*2);
+          ctx.strokeStyle = `rgba(77,166,255,${(1-ph)*0.5})`; ctx.lineWidth=1.2; ctx.stroke();
+        }
+      }
+    });
+    ctx.fillStyle='#4da6ff'; ctx.font='7px sans-serif';
+    ctx.fillText('d '+Math.round(c.props.distance*100)+'%', 0, 28);
+  }
+},
+
+// ---------------------------------------------------------------
+// 2) SENSOR PIR (movimiento) — Sensores — interactivo
+// ---------------------------------------------------------------
+pir_sensor: { label:'Sensor de Movimiento (PIR)', cat:'Sensores', icon:'◐', props:{motion:false, Vcc:5},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,0,'OUT')],
+  interactive:true,
+  onTap(c){ c.props.motion = !c.props.motion; },
+  edges(c){
+    const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vccV < 3.0) return [{n:[2,1], type:'OPEN', value:1e9}];
+    return [{n:[2,1], type:'V', value: c.props.motion? c.props.Vcc:0, Rint:10}];
+  },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]); leadLines(ctx,[[30,0],[14,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,15,Math.PI*0.15,Math.PI*1.85); ctx.stroke();
+    ctx.fillStyle='rgba(170,182,196,.12)'; ctx.fill();
+    if(c.props.motion){
+      for(let i=0;i<3;i++){
+        const ph = ((sim.simTime*1.5 + i/3) % 1);
+        ctx.beginPath(); ctx.arc(0,0,4+ph*20,Math.PI*0.15,Math.PI*1.85);
+        ctx.strokeStyle=`rgba(255,176,46,${(1-ph)*0.6})`; ctx.lineWidth=1.4; ctx.stroke();
+      }
+    }
+    ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(c.props.motion?'movimiento':'toca (quieto)', 0, 28);
+  }
+},
+
+// ---------------------------------------------------------------
+// 3) SENSOR DE NIVEL DE AGUA — Sensores
+// ---------------------------------------------------------------
+water_level_sensor: { label:'Sensor de Nivel de Agua', cat:'Sensores', icon:'≈R', props:{level:0.4, Rmin:300, Rmax:15000},
+  terminals:[T(-40,0),T(40,0)],
+  edges(c){ const R = c.props.Rmax*Math.pow(1-c.props.level,2)+c.props.Rmin; return [{n:[0,1],type:'R',value:R}]; },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-20,-14,40,28);
+    const waterY = 14 - 28*c.props.level;
+    ctx.save(); ctx.beginPath(); ctx.rect(-20,-14,40,28); ctx.clip();
+    ctx.fillStyle='rgba(77,166,255,.45)';
+    ctx.beginPath();
+    ctx.moveTo(-20,14);
+    for(let x=-20;x<=20;x+=4){ ctx.lineTo(x, waterY + Math.sin(sim.simTime*3+x*0.4)*1.6); }
+    ctx.lineTo(20,14); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('nivel '+Math.round(c.props.level*100)+'%', 0, 24);
+  }
+},
+
+// ---------------------------------------------------------------
+// 4) SENSOR DE LLUVIA — Sensores
+// ---------------------------------------------------------------
+rain_sensor: { label:'Sensor de Lluvia', cat:'Sensores', icon:'☔R', props:{rain:0.2, Rmin:400, Rmax:30000},
+  terminals:[T(-40,0),T(40,0)],
+  edges(c){ const R = c.props.Rmax*Math.pow(1-c.props.rain,2)+c.props.Rmin; return [{n:[0,1],type:'R',value:R}]; },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-40,0],[-22,0]]); leadLines(ctx,[[22,0],[40,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-22,-11,44,22);
+    ctx.strokeStyle='#3a4756'; ctx.lineWidth=1;
+    for(let i=-3;i<=3;i++){ ctx.beginPath(); ctx.moveTo(i*6,-11); ctx.lineTo(i*6,11); ctx.stroke(); }
+    const n = Math.round(2+c.props.rain*8);
+    for(let i=0;i<n;i++){
+      const ph = (sim.simTime*1.4 + i*0.37) % 1;
+      const dx = -18 + ((i*53)%40);
+      const dy = -20 + ph*30;
+      if(dy < 11){
+        ctx.strokeStyle='rgba(77,166,255,.8)'; ctx.lineWidth=1.4;
+        ctx.beginPath(); ctx.moveTo(dx,dy); ctx.lineTo(dx-1.5,dy+5); ctx.stroke();
+      }
+    }
+    ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('lluvia '+Math.round(c.props.rain*100)+'%', 0, 22);
+  }
+},
+
+// ---------------------------------------------------------------
+// 5) SENSOR DE LLAMA — Sensores — interactivo
+// ---------------------------------------------------------------
+flame_sensor: { label:'Sensor de Llama', cat:'Sensores', icon:'🔥R', props:{flame:false, Vcc:5},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,0,'OUT')],
+  interactive:true,
+  onTap(c){ c.props.flame = !c.props.flame; },
+  edges(c){
+    const vccV=(c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vccV<3.0) return [{n:[2,1],type:'OPEN',value:1e9}];
+    return [{n:[2,1], type:'V', value: c.props.flame? 0 : c.props.Vcc, Rint:10}]; // activo en bajo, como el módulo real
+  },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]); leadLines(ctx,[[30,0],[14,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-14,-18,28,36);
+    if(c.props.flame){
+      const wob = Math.sin(sim.simTime*14)*2;
+      ctx.fillStyle='#ff8c1a';
+      ctx.beginPath();
+      ctx.moveTo(0+wob,-14); ctx.quadraticCurveTo(9,-2,3,6); ctx.quadraticCurveTo(7,10,0,16);
+      ctx.quadraticCurveTo(-7,10,-3,6); ctx.quadraticCurveTo(-9,-2,0+wob,-14);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#ffe14d';
+      ctx.beginPath(); ctx.ellipse(0,6,3,6,0,0,Math.PI*2); ctx.fill();
+    } else {
+      ctx.fillStyle='#556274'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('IR',0,4);
+    }
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(c.props.flame?'llama (toca)':'sin llama',0,28);
+  }
+},
+
+// ---------------------------------------------------------------
+// 6) DETECTOR DE HUMO — Sensores
+// ---------------------------------------------------------------
+smoke_detector: { label:'Detector de Humo', cat:'Sensores', icon:'💨', props:{smoke:0.1, Vcc:5, threshold:0.5},
+  terminals:[T(-30,20,'VCC'),T(0,20,'GND'),T(30,20,'OUT')],
+  edges(c){
+    const vccV=(c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vccV<3.0) return [{n:[2,1],type:'OPEN',value:1e9}];
+    const on = c.props.smoke >= c.props.threshold;
+    return [{n:[2,1], type:'V', value: on? c.props.Vcc:0, Rint:10}];
+  },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-30,20],[-16,14]]); leadLines(ctx,[[0,20],[0,14]]); leadLines(ctx,[[30,20],[16,14]]);
+    const alarm = c.props.smoke >= c.props.threshold;
+    ctx.strokeStyle= alarm? '#ff5c5c':COL_BODY; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle= alarm? 'rgba(255,92,92,.15)':'rgba(170,182,196,.08)'; ctx.fill();
+    const n = Math.round(c.props.smoke*6);
+    for(let i=0;i<n;i++){
+      const ph = (sim.simTime*0.6 + i*0.29) % 1;
+      const dx = -10 + (i*17)%20 + Math.sin(sim.simTime*2+i)*4;
+      const dy = 6 - ph*34;
+      ctx.beginPath(); ctx.arc(dx,dy,3+ph*3,0,Math.PI*2);
+      ctx.fillStyle=`rgba(180,190,200,${(1-ph)*0.35})`; ctx.fill();
+    }
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(alarm?'¡ALARMA!':'humo '+Math.round(c.props.smoke*100)+'%',0,32);
+  }
+},
+
+// ---------------------------------------------------------------
+// 7) SENSOR DE CORRIENTE ACS712 — Medición — animado con aguja
+// ---------------------------------------------------------------
+current_sensor_acs712: { label:'Sensor de Corriente (ACS712)', cat:'Medición', icon:'A~V', props:{sensitivity:0.185, Vcc:5},
+  terminals:[T(-40,0,'IN'),T(40,0,'OUT'),T(0,-30,'VCC'),T(-18,30,'GND'),T(18,30,'VOUT')],
+  edges(c){
+    const path = {n:[0,1], type:'R', value:0.0015, tag:'meter'};
+    const vcc = (c.state.Vt2||0)-(c.state.Vt3||0);
+    if(vcc < 3.0) return [path, {n:[4,3], type:'OPEN', value:1e9}];
+    const I = c.state.I||0;
+    const vout = clamp01((vcc/2 + I*c.props.sensitivity)/Math.max(vcc,0.001)) * vcc;
+    const sig = {n:[4,3], type:'V', value: vout, Rint:5, tag:'vout'};
+    return [path, sig];
+  },
+  step(c, dt){
+    const target = c.state.I||0;
+    c.state.needle = lerp(c.state.needle||0, target, Math.min(1, dt*6));
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
+    leadLines(ctx,[[0,-30],[0,-14]]); leadLines(ctx,[[-18,30],[-6,14]]); leadLines(ctx,[[18,30],[6,14]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,14,Math.PI,0); ctx.stroke();
+    const powered = ((c.state.Vt2||0)-(c.state.Vt3||0)) >= 3.0;
+    const ang = Math.PI + Math.PI*clamp01(0.5 + (c.state.needle||0)/4);
+    ctx.strokeStyle= powered? '#ffb02e' : '#556274'; ctx.lineWidth=1.8;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(ang)*12, Math.sin(ang)*12); ctx.stroke();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('ACS712',0,-4);
+    ctx.fillText(powered? fmtAmp(c.state.needle||0) : 'sin VCC',0,26);
+  }
+},
+
+// ---------------------------------------------------------------
+// 8) MÓDULO RTC (reloj) — Módulos — manecillas animadas
+// ---------------------------------------------------------------
+rtc_module: { label:'Módulo RTC (Reloj)', cat:'Módulos', icon:'🕐', props:{},
+  terminals:[T(-30,-20,'VCC'),T(-30,0,'SDA'),T(-30,20,'SCL'),T(30,0,'GND')],
+  edges(c){ return [{n:[0,3], type:'R', value:1e7}]; },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-30,-20],[-16,-20]]); leadLines(ctx,[[-30,0],[-16,0]]); leadLines(ctx,[[-30,20],[-16,20]]); leadLines(ctx,[[30,0],[16,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-16,-24,32,48);
+    ctx.beginPath(); ctx.arc(0,-2,14,0,Math.PI*2); ctx.strokeStyle='#8a97a8'; ctx.lineWidth=1.4; ctx.stroke();
+    const sec = sim.simTime % 60, min = (sim.simTime/60)%60;
+    const secAng = sec/60*Math.PI*2 - Math.PI/2, minAng = min/60*Math.PI*2 - Math.PI/2;
+    ctx.strokeStyle='#39d3a8'; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.moveTo(0,-2); ctx.lineTo(Math.cos(minAng)*8, -2+Math.sin(minAng)*8); ctx.stroke();
+    ctx.strokeStyle='#ffb02e'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,-2); ctx.lineTo(Math.cos(secAng)*11, -2+Math.sin(secAng)*11); ctx.stroke();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('RTC',0,30);
+  }
+},
+
+// ---------------------------------------------------------------
+// 9) MÓDULO BLUETOOTH (HC-05) — Módulos — LED de estado animado
+// ---------------------------------------------------------------
+bluetooth_module: { label:'Módulo Bluetooth (HC-05)', cat:'Módulos', icon:'🔷', props:{paired:false},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,-16,'TX'),T(30,16,'RX')],
+  interactive:true,
+  onTap(c){ c.props.paired = !c.props.paired; },
+  edges(c){ return [{n:[0,1], type:'R', value:1200}]; },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]); leadLines(ctx,[[30,-16],[14,-16]]); leadLines(ctx,[[30,16],[14,16]]);
+    ctx.strokeStyle='#4da6ff'; ctx.lineWidth=1.6; ctx.strokeRect(-14,-20,28,40);
+    const period = c.props.paired? 1.0 : 0.25;
+    const on = (sim.simTime % period) < period*0.5;
+    ctx.beginPath(); ctx.arc(0,-4,4,0,Math.PI*2);
+    ctx.fillStyle = on? '#4da6ff' : '#1c2530'; ctx.fill();
+    if(on){ ctx.strokeStyle='rgba(77,166,255,.5)'; ctx.beginPath(); ctx.arc(0,-4,7,0,Math.PI*2); ctx.stroke(); }
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('HC-05',0,10);
+    ctx.fillText(c.props.paired?'vinculado':'buscando',0,28);
+  }
+},
+
+// ---------------------------------------------------------------
+// 10) MÓDULO WIFI (ESP8266) — Módulos — ondas animadas
+// ---------------------------------------------------------------
+wifi_module: { label:'Módulo WiFi (ESP8266)', cat:'Módulos', icon:'📶', props:{connected:false},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,-16,'TX'),T(30,16,'RX'),T(0,30,'EN')],
+  interactive:true,
+  onTap(c){ c.props.connected = !c.props.connected; },
+  edges(c){ return [{n:[0,1], type:'R', value:800}]; },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]); leadLines(ctx,[[30,-16],[14,-16]]); leadLines(ctx,[[30,16],[14,16]]); leadLines(ctx,[[0,30],[0,20]]);
+    const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+    const enV = (c.state.Vt4||0)-(c.state.Vt1||0);
+    const powered = vccV >= 3.0 && enV >= 2.0;
+    const showConnected = c.props.connected && powered;
+    ctx.strokeStyle='#39d3a8'; ctx.lineWidth=1.6; ctx.strokeRect(-14,-20,28,40);
+    if(showConnected){
+      for(let i=0;i<3;i++){
+        const ph = ((sim.simTime*0.9 + i/3) % 1);
+        ctx.beginPath(); ctx.arc(0,4,3+ph*10,Math.PI*1.15,Math.PI*1.85);
+        ctx.strokeStyle=`rgba(57,211,168,${(1-ph)*0.7})`; ctx.lineWidth=1.4; ctx.stroke();
+      }
+    } else {
+      ctx.strokeStyle='#556274'; ctx.beginPath(); ctx.arc(0,4,6,Math.PI*1.15,Math.PI*1.85); ctx.stroke();
+    }
+    ctx.fillStyle='#556274'; ctx.beginPath(); ctx.arc(0,4,1.6,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('ESP8266',0,-8);
+    ctx.fillText(!powered? 'sin EN/VCC' : (showConnected?'conectado':'sin red'),0,28);
+  }
+},
+// ---------------------------------------------------------------
+// 11) PANTALLA LCD 16x2 — Salida — cursor parpadeante
+// ---------------------------------------------------------------
+lcd_1602: { label:'Pantalla LCD 16x2', cat:'Salida', icon:'▭▭', props:{R:220},
+  terminals:[T(-40,0),T(40,0)],
+  edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-40,0],[-24,0]]); leadLines(ctx,[[24,0],[40,0]]);
+    const on = Math.abs(c.state?.I||0) > 0.003;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-24,-16,48,32);
+    ctx.fillStyle= on? 'rgba(90,220,140,.25)':'rgba(60,70,80,.2)'; ctx.fillRect(-22,-14,44,28);
+    ctx.fillStyle= on? '#1f3d2c':'#2a3238';
+    for(let r=0;r<2;r++) for(let col=0;col<8;col++) ctx.fillRect(-20+col*5.4,-9+r*13,4,9);
+    if(on){
+      const blink = (sim.simTime%1)<0.5;
+      if(blink){ ctx.fillStyle='#39d3a8'; ctx.fillRect(-20,-9,4,9); }
+    }
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(on?'LCD 16x2 ON':'LCD 16x2', 0, 24);
+  }
+},
+
+// ---------------------------------------------------------------
+// 12) MOTOR PASO A PASO — Salida — giro "escalonado" animado
+// ---------------------------------------------------------------
+stepper_motor: { label:'Motor Paso a Paso', cat:'Salida', icon:'⚙⚙', props:{Rcoil:30, stepsPerRev:24},
+  terminals:[T(-40,-20,'A+'),T(-40,20,'A-'),T(40,-20,'B+'),T(40,20,'B-')],
+  edges(c){
+    return [
+      {n:[0,1], type:'R', value:c.props.Rcoil, tag:'a'},
+      {n:[2,3], type:'R', value:c.props.Rcoil, tag:'b'}
+    ];
+  },
+  step(c, dt, sim){
+    const I = Math.abs(c.state.I_a||0) + Math.abs(c.state.I_b||0);
+    const target = (c.state.rawAngle||0) + I*dt*220;
+    c.state.rawAngle = target;
+    const stepSize = (Math.PI*2)/Math.max(4,c.props.stepsPerRev);
+    c.state.angle = Math.round(target/stepSize)*stepSize; // efecto de "paso" discreto
+  },
+  draw(ctx,c){
+    c.terminals.forEach(t=> leadLines(ctx,[[t.x,t.y],[t.x<0? t.x+16:t.x-16, t.y]]));
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.stroke();
+    const moving = (Math.abs(c.state.I_a||0)+Math.abs(c.state.I_b||0)) > 0.01;
+    ctx.save(); ctx.rotate(c.state.angle||0);
+    ctx.strokeStyle = moving? COL_WIRE_ON:COL_BODY;
+    for(let i=0;i<8;i++){ ctx.save(); ctx.rotate(i*Math.PI/4); ctx.beginPath(); ctx.moveTo(6,0); ctx.lineTo(18,0); ctx.stroke(); ctx.restore(); }
+    ctx.restore();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('STEPPER',0,32);
+  }
+},
+
+// ---------------------------------------------------------------
+// 13) MOTOR DE VIBRACIÓN — Salida — sacudida animada
+// ---------------------------------------------------------------
+vibration_motor: { label:'Motor de Vibración', cat:'Salida', icon:'᎒', props:{R:25},
+  terminals:[T(-40,0),T(40,0)],
+  edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
+  draw(ctx,c,sim){
+    const I = Math.abs(c.state?.I||0);
+    const shake = I>0.01;
+    const jx = shake? Math.sin(sim.simTime*90)*2*Math.min(1,I*20) : 0;
+    const jy = shake? Math.cos(sim.simTime*130)*1.4*Math.min(1,I*20) : 0;
+    leadLines(ctx,[[-40,0],[-16+jx,0+jy]]); leadLines(ctx,[[16+jx,0+jy],[40,0]]);
+    ctx.save(); ctx.translate(jx,jy);
+    ctx.strokeStyle= shake? COL_WIRE_ON:COL_BODY; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(0,0,15,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle= shake? 'rgba(255,176,46,.2)':'rgba(170,182,196,.08)'; ctx.fill();
+    ctx.restore();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(shake?'VIBRANDO':'motor', 0, 26);
+  }
+},
+
+// ---------------------------------------------------------------
+// 14) SOLENOIDE — Salida — émbolo animado con inercia
+// ---------------------------------------------------------------
+solenoid: { label:'Solenoide (Electroimán lineal)', cat:'Salida', icon:'⊏⊐', props:{R:20, Ipull:0.05},
+  terminals:[T(-40,0),T(40,0)],
+  edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
+  step(c, dt){
+    const pulled = Math.abs(c.state.I||0) >= c.props.Ipull;
+    const target = pulled? 1 : 0;
+    c.state.ext = lerp(c.state.ext||0, target, Math.min(1, dt*10));
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-20,-11,26,22);
+    const ext = c.state.ext||0;
+    ctx.fillStyle = ext>0.5? COL_WIRE_ON : COL_BODY2;
+    ctx.fillRect(6, -4, 10+ext*14, 8);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(ext>0.5?'ACTIVADO':'reposo',0,22);
+  }
+},
+
+// ---------------------------------------------------------------
+// 15) DIODO SUPRESOR TVS — Semiconductores — destello al recortar
+// ---------------------------------------------------------------
+tvs_diode: { label:'Diodo Supresor TVS', cat:'Semiconductores', icon:'⚡◇', props:{Vclamp:15, Ron:4},
+  terminals:[T(-40,0),T(40,0)],
+  edges(c){
+    const Vprev = Math.abs(c.state?.V||0);
+    const clamping = Vprev >= c.props.Vclamp;
+    return [{n:[0,1], type:'R', value: clamping? c.props.Ron : 1e8}];
+  },
+  step(c, dt){
+    const clamping = Math.abs(c.state?.V||0) >= c.props.Vclamp;
+    c.state.flash = clamping? 1 : Math.max(0,(c.state.flash||0) - dt*3);
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
+    const f = c.state.flash||0;
+    if(f>0.02){
+      const g=ctx.createRadialGradient(0,0,2,0,0,24);
+      g.addColorStop(0,`rgba(255,92,92,${f})`); g.addColorStop(1,'rgba(255,92,92,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,24,0,Math.PI*2); ctx.fill();
+    }
+    ctx.strokeStyle= f>0.02? '#ff5c5c':COL_BODY; ctx.lineWidth=2.2;
+    ctx.beginPath(); ctx.moveTo(0,-14); ctx.lineTo(13,0); ctx.lineTo(0,14); ctx.lineTo(-13,0); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-13,0); ctx.lineTo(13,0); ctx.stroke();
+    ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(c.props.Vclamp+'V',0,26);
+  }
+}
+
+};
+
+// ---- registrar los componentes nuevos sin tocar el script original ----
+Object.assign(COMPONENTS, NUEVOS);
+
+// ---- animación extra para 3 componentes YA existentes (mejora visual) ----
+// LED: además del resplandor ya existente, añade un parpadeo sutil de encendido.
+if(COMPONENTS.led){
+  const origLedDraw = COMPONENTS.led.draw;
+  COMPONENTS.led.draw = function(ctx,c,sim){
+    origLedDraw(ctx,c,sim);
+    if(!c.props.burned){
+      const I = Math.abs(c.state?.I||0);
+      if(I>0.001){
+        const flick = 0.85 + 0.15*Math.sin(sim.simTime*40 + (c.x||0));
+        ctx.save(); ctx.globalAlpha = 0.18*flick;
+        ctx.fillStyle = c.props.color;
+        ctx.beginPath(); ctx.arc(0,0,17,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+    }
+  };
+}
+// Ventilador/motor: agrega estela de movimiento (motion blur) en las aspas.
+['fan','fan_12v','motor'].forEach(type=>{
+  if(!COMPONENTS[type]) return;
+  const origDraw = COMPONENTS[type].draw;
+  COMPONENTS[type].draw = function(ctx,c,sim){
+    const spinBefore = c.state?.spin||0;
+    origDraw(ctx,c,sim);
+    const I = Math.abs(c.state?.I||0);
+    if(I>0.01){
+      ctx.save(); ctx.globalAlpha=0.18; ctx.strokeStyle=COL_WIRE_ON; ctx.lineWidth=3;
+      ctx.rotate(spinBefore-0.3);
+      ctx.beginPath(); ctx.moveTo(-16,0); ctx.lineTo(16,0); ctx.stroke();
+      ctx.restore();
+    }
+  };
+});
+// Relé: transición animada del inducido en vez de cambio instantáneo.
+if(COMPONENTS.relay){
+  const origRelayDraw = COMPONENTS.relay.draw;
+  COMPONENTS.relay.step = function(c, dt){
+    const pulled = Math.abs(c.state?.Icoil||0) >= c.props.Ipull;
+    c.state.armPos = lerp(c.state.armPos||0, pulled?1:0, Math.min(1,dt*8));
+  };
+  COMPONENTS.relay.draw = function(ctx,c,sim){
+    origRelayDraw(ctx,c,sim);
+    const a = c.state.armPos||0;
+    if(a>0.02){
+      ctx.save(); ctx.globalAlpha = a*0.5;
+      ctx.strokeStyle='#ffb02e'; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(-14+a*4,-20); ctx.lineTo(-14+a*4,20); ctx.stroke();
+      ctx.restore();
+    }
+  };
+}
+
+// ---- campos del panel de propiedades para los componentes nuevos ----
+if(typeof propFieldsFor === 'function'){
+  const _origPropFieldsFor = propFieldsFor;
+  const EXTRA_FIELDS = {
+    ultrasonic_sensor:[{key:'distance',label:'Distancia detectada',type:'range'}],
+    pir_sensor:[],
+    water_level_sensor:[{key:'level',label:'Nivel de agua',type:'range'}],
+    rain_sensor:[{key:'rain',label:'Intensidad de lluvia',type:'range'}],
+    flame_sensor:[],
+    smoke_detector:[{key:'smoke',label:'Nivel de humo',type:'range'},{key:'threshold',label:'Umbral de alarma',type:'range'}],
+    current_sensor_acs712:[{key:'sensitivity',label:'Sensibilidad (V/A)',step:0.005}],
+    stepper_motor:[{key:'Rcoil',label:'Resistencia bobina (Ω)'},{key:'stepsPerRev',label:'Pasos por vuelta'}],
+    vibration_motor:[{key:'R',label:'Resistencia (Ω)'}],
+    solenoid:[{key:'R',label:'Resistencia (Ω)'},{key:'Ipull',label:'Corriente de activación (A)',step:0.005}],
+    tvs_diode:[{key:'Vclamp',label:'Voltaje de recorte (V)',step:0.5}],
+    lcd_1602:[{key:'R',label:'Resistencia (Ω)'}]
+  };
+  propFieldsFor = function(type){
+    if(EXTRA_FIELDS[type]) return EXTRA_FIELDS[type];
+    return _origPropFieldsFor(type);
+  };
+}
+})();
+</script>
+<script>
+// ============================================================
+// nuevos-componentes-2.js — Segundo paquete (15 componentes)
+// Pegar DESPUÉS de nuevos-componentes.js
+// ============================================================
+(function(){
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+function clamp01(v){ return Math.max(0,Math.min(1,v)); }
+
+const NUEVOS2 = {
+
+// ---------------------------------------------------------------
+// 1) REGULADOR LM7805 — Control — 3 pines reales: IN, GND, OUT
+// ---------------------------------------------------------------
+lm7805_regulator: { label:'Regulador LM7805 (5V)', cat:'Control', icon:'7805', props:{Vout:5, dropout:2},
+  terminals:[T(-30,0,'IN'),T(0,25,'GND'),T(30,0,'OUT')],
+  edges(c){
+    const vin = (c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vin <= 1) return [{n:[2,1], type:'OPEN', value:1e9}];
+    let v;
+    if(vin >= c.props.Vout + c.props.dropout) v = c.props.Vout;
+    else v = Math.max(0, vin - c.props.dropout); // caída si no hay margen suficiente (dropout)
+    return [{n:[2,1], type:'V', value:v, Rint:0.4}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,0],[-14,0]]); leadLines(ctx,[[0,25],[0,14]]); leadLines(ctx,[[30,0],[14,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-14,-18,28,32);
+    ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('7805',0,-2);
+    ctx.font='7px sans-serif'; ctx.fillText(c.props.Vout+'V',0,10);
+  }
+},
+
+// ---------------------------------------------------------------
+// 2) SENSOR DHT11 — Sensores — 3 pines: VCC, DATA, GND
+// El pin DATA es open-drain real: sin resistencia pull-up externa
+// hacia VCC, el bus queda flotando (igual que el chip real).
+// ---------------------------------------------------------------
+dht11_sensor: { label:'Sensor DHT11 (Temp/Humedad)', cat:'Sensores', icon:'DHT', props:{temp:0.4, humidity:0.5, Vcc:5},
+  terminals:[T(-30,0,'VCC'),T(0,-24,'DATA'),T(30,0,'GND')],
+  edges(c){
+    // DATA siempre en alta impedancia: el protocolo de un solo hilo requiere
+    // una resistencia pull-up externa entre DATA y VCC para funcionar de verdad.
+    return [{n:[1,2], type:'OPEN', value:1e9}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,0],[-16,0]]); leadLines(ctx,[[0,-24],[0,-14]]); leadLines(ctx,[[30,0],[16,0]]);
+    const powered = ((c.state.Vt0||0)-(c.state.Vt2||0)) >= 2.7;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-16,-14,32,28);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('DHT11',0,-2);
+    ctx.font='6.5px sans-serif';
+    ctx.fillText(powered? (c.props.temp*50).toFixed(0)+'°C '+Math.round(c.props.humidity*100)+'%RH' : 'sin VCC', 0, 8);
+    ctx.font='6px sans-serif'; ctx.fillText('DATA necesita pull-up', 0, 26);
+  }
+},
+
+// ---------------------------------------------------------------
+// 3) MÓDULO DE RELÉ OPTOACOPLADO — Control — 6 pines:
+// VCC, GND, IN (disparo activo en bajo, como el módulo real),
+// COM, NO, NC
+// ---------------------------------------------------------------
+relay_module: { label:'Módulo de Relé (activo en bajo)', cat:'Control', icon:'⛭◇', props:{Vth:2.5},
+  terminals:[T(-40,-24,'VCC'),T(-40,0,'GND'),T(-40,24,'IN'),T(40,-24,'COM'),T(40,0,'NO'),T(40,24,'NC')],
+  edges(c){
+    const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vccV < 3.0) return [{n:[3,4], type:'OPEN', value:1e9},{n:[3,5], type:'R', value:0.05}];
+    const vin = (c.state.Vt2||0)-(c.state.Vt1||0);
+    const energized = vin < c.props.Vth; // activo en BAJO, como los módulos reales de Arduino
+    return [
+      {n:[3,4], type: energized? 'R':'OPEN', value:0.05},
+      {n:[3,5], type: energized? 'OPEN':'R', value:0.05}
+    ];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,-24],[-16,-24]]); leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[-40,24],[-16,24]]);
+    leadLines(ctx,[[40,-24],[16,-24]]); leadLines(ctx,[[40,0],[16,0]]); leadLines(ctx,[[40,24],[16,24]]);
+    const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+    const energized = vccV>=3.0 && ((c.state.Vt2||0)-(c.state.Vt1||0)) < c.props.Vth;
+    ctx.strokeStyle= energized? COL_WIRE_ON:COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-16,-30,32,60);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('RELÉ',0,-2); ctx.font='6px sans-serif'; ctx.fillText(energized?'ON':'off',0,10);
+  }
+},
+
+// ---------------------------------------------------------------
+// 4) ZUMBADOR PIEZOELÉCTRICO PASIVO — Salida — 2 pines
+// A diferencia del zumbador activo, necesita una señal alterna
+// (PWM/AC) para sonar; con DC fijo solo hace un "clic" y calla.
+// ---------------------------------------------------------------
+passive_buzzer: { label:'Zumbador Piezo. Pasivo', cat:'Salida', icon:'🔔≈', props:{R:1000},
+  terminals:[T(-40,0),T(40,0)],
+  edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
+  step(c, dt){
+    const v = c.state?.V||0;
+    const prevSign = c.state._prevSign ?? 0;
+    const sign = v>0.05? 1 : (v<-0.05? -1 : 0);
+    if(sign !== 0 && prevSign !== 0 && sign !== prevSign) c.state._flipTimer = 1; // detecta cambio de polaridad = señal AC
+    else c.state._flipTimer = Math.max(0,(c.state._flipTimer||0)-dt*3);
+    c.state._prevSign = sign || prevSign;
+  },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
+    const sounding = (c.state._flipTimer||0) > 0.05;
+    ctx.strokeStyle= sounding? COL_WIRE_ON:COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,16,0,Math.PI*2); ctx.stroke();
+    if(sounding){ for(let i=0;i<2;i++){ ctx.beginPath(); ctx.arc(0,0,20+i*5,0,Math.PI*2); ctx.strokeStyle='rgba(255,176,46,.4)'; ctx.stroke(); } }
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(sounding?'sonando (AC)':'requiere señal AC/PWM',0,28);
+  }
+},
+
+// ---------------------------------------------------------------
+// 5) FUSIBLE TÉRMICO — Control — 2 pines, se funde a un
+// umbral de temperatura y NO se rearma (a diferencia del PTC).
+// ---------------------------------------------------------------
+thermal_fuse: { label:'Fusible Térmico (un solo uso)', cat:'Control', icon:'🌡⎓', props:{temp:0.3, threshold:0.75, blown:false},
+  terminals:[T(-40,0),T(40,0)],
+  edges(c){ return [{n:[0,1], type: c.props.blown?'OPEN':'R', value:0.05}]; },
+  step(c){
+    if(!c.props.blown && c.props.temp >= c.props.threshold) c.props.blown = true;
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
+    ctx.strokeStyle= c.props.blown? '#ff5c5c':COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-18,-8,36,16);
+    ctx.beginPath();
+    if(c.props.blown){ ctx.moveTo(-14,0); ctx.lineTo(-4,-6); ctx.lineTo(4,6); ctx.lineTo(14,0); } else { ctx.moveTo(-14,0); ctx.lineTo(14,0); }
+    ctx.stroke();
+    ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(c.props.blown?'FUNDIDO (permanente)':'temp '+Math.round(c.props.temp*100)+'%', 0, 22);
+  }
+},
+
+// ---------------------------------------------------------------
+// 6) RELÉ DE ESTADO SÓLIDO (SSR) — Control — 4 pines:
+// IN+, IN-, LOAD1, LOAD2. Aislamiento total real entre control y carga.
+// ---------------------------------------------------------------
+solid_state_relay: { label:'Relé de Estado Sólido (SSR)', cat:'Control', icon:'▣⚡', props:{Vth:3.0},
+  terminals:[T(-40,-16,'IN+'),T(-40,16,'IN-'),T(40,-16,'LOAD1'),T(40,16,'LOAD2')],
+  edges(c){
+    const vin = (c.state.Vt0||0)-(c.state.Vt1||0);
+    const on = vin >= c.props.Vth;
+    // No hay nodo compartido entre control y carga: aislamiento real.
+    return [{n:[2,3], type: on?'R':'OPEN', value:0.08}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,-16],[-14,-16]]); leadLines(ctx,[[-40,16],[-14,16]]);
+    leadLines(ctx,[[40,-16],[14,-16]]); leadLines(ctx,[[40,16],[14,16]]);
+    const on = ((c.state.Vt0||0)-(c.state.Vt1||0)) >= c.props.Vth;
+    ctx.strokeStyle= on? COL_WIRE_ON:COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-14,-22,28,44);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('SSR',0,-2);
+    ctx.font='6.5px sans-serif'; ctx.fillText(on?'CONDUCE':'aislado',0,10);
+  }
+},
+
+// ---------------------------------------------------------------
+// 7) SENSOR DE PROXIMIDAD INDUCTIVO — Sensores — 3 pines
+// (VCC, GND, OUT tipo PNP: activa fuente hacia Vcc al detectar metal)
+// ---------------------------------------------------------------
+inductive_proximity_sensor: { label:'Sensor Inductivo (metal)', cat:'Sensores', icon:'⌁M', props:{detect:false, Vcc:12},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,0,'OUT')],
+  interactive:true,
+  onTap(c){ c.props.detect = !c.props.detect; },
+  edges(c){
+    const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vccV < 6.0) return [{n:[2,1], type:'OPEN', value:1e9}]; // requiere ~10-30V típico
+    return [{n:[2,1], type:'V', value: c.props.detect? c.props.Vcc:0, Rint:20}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]); leadLines(ctx,[[30,0],[14,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-14,-18,28,36);
+    ctx.fillStyle= c.props.detect? 'rgba(255,176,46,.35)':'rgba(120,130,145,.12)'; ctx.fillRect(-14,-18,28,36);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('IND.',0,2); ctx.font='6.5px sans-serif'; ctx.fillText(c.props.detect?'metal (toca)':'sin metal',0,26);
+  }
+},
+
+// ---------------------------------------------------------------
+// 8) CARGADOR TP4056 — Módulos — 4 pines: IN+, IN-, BAT+, BAT-
+// Solo carga si hay al menos ~4.5V en la entrada USB.
+// ---------------------------------------------------------------
+tp4056_charger: { label:'Cargador Li-ion TP4056', cat:'Módulos', icon:'🔋⚡', props:{Vfloat:4.2},
+  terminals:[T(-40,-16,'IN+'),T(-40,16,'IN-'),T(40,-16,'BAT+'),T(40,16,'BAT-')],
+  edges(c){
+    const vin = (c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vin < 4.5) return [{n:[2,3], type:'OPEN', value:1e9}];
+    return [{n:[2,3], type:'V', value:c.props.Vfloat, Rint:1.5}]; // carga tipo CV simplificada
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,-16],[-14,-16]]); leadLines(ctx,[[-40,16],[-14,16]]);
+    leadLines(ctx,[[40,-16],[14,-16]]); leadLines(ctx,[[40,16],[14,16]]);
+    const charging = ((c.state.Vt0||0)-(c.state.Vt1||0)) >= 4.5;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-14,-20,28,40);
+    ctx.fillStyle= charging? '#ff5c5c':'#39d3a8';
+    ctx.beginPath(); ctx.arc(0,-6,3,0,Math.PI*2); ctx.fill(); // LED rojo=cargando, verde=lleno/apagado
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('TP4056',0,10); ctx.fillText(charging?'cargando':'sin entrada',0,20);
+  }
+},
+
+// ---------------------------------------------------------------
+// 9) AMPLIFICADOR LM386 — Módulos — 5 pines:
+// in+, in-, VCC, GND, OUT (alimentación única, típico de audio)
+// ---------------------------------------------------------------
+lm386_amplifier: { label:'Amplificador de Audio LM386', cat:'Módulos', icon:'🔊OP', props:{gain:20, Vcc_min:4},
+  terminals:[T(-30,-16,'in-'),T(-30,16,'in+'),T(0,-30,'VCC'),T(0,30,'GND'),T(40,0,'OUT')],
+  edges(c){
+    const vcc = (c.state.Vt2||0)-(c.state.Vt3||0);
+    if(vcc < c.props.Vcc_min) return [{n:[4,3], type:'OPEN', value:1e9}];
+    const vp = c.state.Vt1||0, vm = c.state.Vt0||0;
+    let vout = c.props.gain*(vp-vm);
+    vout = Math.max(0, Math.min(vcc, vout)); // salida referida a GND, alimentación única
+    c.state.Vout = vout;
+    return [{n:[4,3], type:'V', value:vout, Rint:4}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,-16],[-10,-8]]); leadLines(ctx,[[-30,16],[-10,8]]);
+    leadLines(ctx,[[0,-30],[0,-14]]); leadLines(ctx,[[0,30],[0,14]]); leadLines(ctx,[[40,0],[10,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(-10,-18); ctx.lineTo(12,0); ctx.lineTo(-10,18); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('LM386',0,26);
+  }
+},
+
+// ---------------------------------------------------------------
+// 10) TRIAC — Semiconductores — 3 pines: MT1, MT2, GATE
+// Interruptor bidireccional que enclava al recibir corriente
+// de gate (en cualquier sentido) y se apaga bajo corriente
+// de mantenimiento, como un TRIAC real.
+// ---------------------------------------------------------------
+triac: { label:'TRIAC (interruptor bidireccional)', cat:'Semiconductores', icon:'⇹⚡', props:{Igt:0.003, Ih:0.001},
+  terminals:[T(-40,0,'MT1'),T(40,0,'MT2'),T(0,34,'gate')],
+  edges(c){
+    const latched = c.state?.latched || false;
+    return [
+      {n:[0,1], type: latched? 'R':'OPEN', value:8},
+      {n:[2,0], type:'R', value:180, tag:'gatesense'}
+    ];
+  },
+  postSolve(c){
+    const Iload = Math.abs(c.state?.I||0);
+    const gateI = Math.abs(c.state?.Igate||0);
+    if(!c.state.latched){
+      if(gateI >= c.props.Igt) c.state.latched = true; // dispara en cualquier semiciclo
+    } else if(Iload < c.props.Ih){ c.state.latched = false; }
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-13,0]]); leadLines(ctx,[[13,0],[40,0]]); leadLines(ctx,[[0,34],[0,10]]);
+    const on = c.state?.latched;
+    ctx.fillStyle= on? '#ffb02e':COL_BODY2;
+    ctx.beginPath(); ctx.moveTo(-13,-11); ctx.lineTo(0,0); ctx.lineTo(-13,11); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(13,11); ctx.lineTo(0,0); ctx.lineTo(13,-11); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(0,10); ctx.lineTo(0,5); ctx.stroke();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(on?'CONDUCE':'bloqueado',0,-18);
+  }
+},
+
+// ---------------------------------------------------------------
+// 11) OPTOACOPLADOR MOC3021 (disparo de TRIAC) — Semiconductores
+// 4 pines: LED+, LED-, MT1, MT2. Aísla el microcontrolador del
+// circuito de potencia; salida bidireccional (sin polaridad en MT).
+// ---------------------------------------------------------------
+moc3021_optocoupler: { label:'Optoacoplador MOC3021 (driver TRIAC)', cat:'Semiconductores', icon:'⇹◇', props:{Vf:1.2, Ith:0.008},
+  terminals:[T(-40,-16,'led+'),T(-40,16,'led-'),T(40,-16,'MT1'),T(40,16,'MT2')],
+  edges(c){
+    const Iled = Math.abs(c.state?.Iled||0);
+    const on = Iled >= c.props.Ith;
+    return [
+      {n:[0,1], type:'DIODE', value:c.props.Vf, Ron:100, tag:'led'},
+      {n:[2,3], type: on? 'R':'OPEN', value:24}
+    ];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,-16],[-14,-16]]); leadLines(ctx,[[-40,16],[-14,16]]);
+    leadLines(ctx,[[40,-16],[14,-16]]); leadLines(ctx,[[40,16],[14,16]]);
+    const on = Math.abs(c.state?.Iled||0) >= c.props.Ith;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-14,-24,28,48);
+    ctx.fillStyle= on? 'rgba(255,176,46,.5)':'rgba(120,130,145,.15)'; ctx.fillRect(-14,-24,28,48);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('MOC3021',0,4);
+  }
+},
+
+// ---------------------------------------------------------------
+// 12) INTERRUPTOR DE LÍMITE (fin de carrera) — Control
+// 3 pines: COM, NO, NC — mecánico, con palanca
+// ---------------------------------------------------------------
+limit_switch: { label:'Interruptor de Límite (fin de carrera)', cat:'Control', icon:'⏚⏻', props:{pressed:false},
+  terminals:[T(-40,0,'COM'),T(40,-20,'NO'),T(40,20,'NC')],
+  interactive:true,
+  onTap(c){ c.props.pressed = !c.props.pressed; },
+  edges(c){
+    return [
+      {n:[0,1], type: c.props.pressed?'R':'OPEN', value:0.03},
+      {n:[0,2], type: c.props.pressed?'OPEN':'R', value:0.03}
+    ];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[22,-20],[40,-20]]); leadLines(ctx,[[22,20],[40,20]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(-20,0); ctx.lineTo(c.props.pressed? 20:14, c.props.pressed? -20:-10); ctx.stroke();
+    ctx.strokeStyle= c.props.pressed? COL_WIRE_ON:COL_BODY2; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(-6,c.props.pressed?-6:-16); ctx.lineTo(10,c.props.pressed?-2:-24); ctx.stroke();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(c.props.pressed?'ACCIONADO':'toca (libre)',0,30);
+  }
+},
+
+// ---------------------------------------------------------------
+// 13) CÉLULA PELTIER (TEC1-12706) — Salida — 2 pines
+// La cara que se calienta/enfría depende del sentido de la corriente.
+// ---------------------------------------------------------------
+peltier_cell: { label:'Célula Peltier (TEC1-12706)', cat:'Salida', icon:'❄🔥', props:{R:2},
+  terminals:[T(-40,0,'+'),T(40,0,'-')],
+  edges(c){ return [{n:[0,1], type:'R', value:c.props.R}]; },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
+    const I = c.state?.I||0;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-20,-14,40,28);
+    if(Math.abs(I) > 0.02){
+      ctx.fillStyle = I>0? 'rgba(77,166,255,.35)':'rgba(255,90,40,.35)'; ctx.fillRect(-20,-14,18,28); // lado frío/caliente
+      ctx.fillStyle = I>0? 'rgba(255,90,40,.35)':'rgba(77,166,255,.35)'; ctx.fillRect(2,-14,18,28);
+    }
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('PELTIER',0,24);
+  }
+},
+
+// ---------------------------------------------------------------
+// 14) CONTACTOR ELECTROMAGNÉTICO — Control — 8 pines:
+// bobina A1/A2 + 3 polos de potencia (L1-T1, L2-T2, L3-T3)
+// ---------------------------------------------------------------
+power_contactor: { label:'Contactor Electromagnético (3 polos)', cat:'Control', icon:'⛭⛭', props:{Rcoil:200, Ipull:0.02},
+  terminals:[
+    T(-40,-40,'A1'),T(-40,40,'A2'),
+    T(40,-40,'L1'),T(40,-16,'T1'),T(40,8,'L2'),T(40,32,'T2'),T(-40,0,'L3'),T(-40,20,'T3')
+  ],
+  edges(c){
+    const pulled = Math.abs(c.state?.Icoil||0) >= c.props.Ipull;
+    const st = pulled? 'R':'OPEN';
+    return [
+      {n:[0,1], type:'R', value:c.props.Rcoil, tag:'coil'},
+      {n:[2,3], type:st, value:0.03},
+      {n:[4,5], type:st, value:0.03},
+      {n:[6,7], type:st, value:0.03}
+    ];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,-40],[-16,-40]]); leadLines(ctx,[[-40,40],[-16,40]]);
+    leadLines(ctx,[[40,-40],[16,-40]]); leadLines(ctx,[[40,-16],[16,-16]]);
+    leadLines(ctx,[[40,8],[16,8]]); leadLines(ctx,[[40,32],[16,32]]);
+    leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[-40,20],[-16,20]]);
+    const pulled = Math.abs(c.state?.Icoil||0) >= c.props.Ipull;
+    ctx.strokeStyle= pulled? COL_WIRE_ON:COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-16,-46,32,92);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('CONTACTOR',0,0);
+    ctx.font='6.5px sans-serif'; ctx.fillText(pulled?'ENERGIZADO':'reposo',0,10);
+  }
+},
+
+// ---------------------------------------------------------------
+// 15) SENSOR DE PROXIMIDAD CAPACITIVO — Sensores — 3 pines
+// (VCC, GND, OUT tipo PNP), detecta metal, plástico, líquidos...
+// ---------------------------------------------------------------
+capacitive_proximity_sensor: { label:'Sensor de Proximidad Capacitivo', cat:'Sensores', icon:'⌁C', props:{detect:false, Vcc:12},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,0,'OUT')],
+  interactive:true,
+  onTap(c){ c.props.detect = !c.props.detect; },
+  edges(c){
+    const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vccV < 6.0) return [{n:[2,1], type:'OPEN', value:1e9}];
+    return [{n:[2,1], type:'V', value: c.props.detect? c.props.Vcc:0, Rint:20}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]); leadLines(ctx,[[30,0],[14,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-14,-18,28,36);
+    ctx.fillStyle= c.props.detect? 'rgba(57,211,168,.35)':'rgba(120,130,145,.12)'; ctx.fillRect(-14,-18,28,36);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('CAP.',0,2); ctx.font='6.5px sans-serif'; ctx.fillText(c.props.detect?'objeto (toca)':'sin objeto',0,26);
+  }
+}
+
+};
+
+Object.assign(COMPONENTS, NUEVOS2);
+
+// ---- campos del panel de propiedades para los componentes nuevos ----
+if(typeof propFieldsFor === 'function'){
+  const _origPropFieldsFor2 = propFieldsFor;
+  const EXTRA_FIELDS2 = {
+    lm7805_regulator:[{key:'Vout',label:'Voltaje de salida (V)',step:0.5},{key:'dropout',label:'Dropout (V)',step:0.1}],
+    dht11_sensor:[{key:'temp',label:'Temperatura simulada',type:'range'},{key:'humidity',label:'Humedad simulada',type:'range'}],
+    relay_module:[{key:'Vth',label:'Umbral de disparo IN (V)',step:0.1}],
+    passive_buzzer:[{key:'R',label:'Impedancia (Ω)'}],
+    thermal_fuse:[{key:'temp',label:'Temperatura simulada',type:'range'},{key:'threshold',label:'Umbral de fusión',type:'range'}],
+    solid_state_relay:[{key:'Vth',label:'Umbral de disparo IN (V)',step:0.1}],
+    inductive_proximity_sensor:[{key:'Vcc',label:'Voltaje de alimentación (V)',step:1}],
+    tp4056_charger:[{key:'Vfloat',label:'Voltaje de carga (V)',step:0.1}],
+    lm386_amplifier:[{key:'gain',label:'Ganancia',step:1},{key:'Vcc_min',label:'Vcc mínimo (V)',step:0.5}],
+    triac:[{key:'Igt',label:'Corriente de disparo (A)',step:0.0005},{key:'Ih',label:'Corriente de mantenimiento (A)',step:0.0005}],
+    moc3021_optocoupler:[{key:'Ith',label:'Corriente de disparo LED (A)',step:0.0005}],
+    peltier_cell:[{key:'R',label:'Resistencia (Ω)'}],
+    power_contactor:[{key:'Rcoil',label:'Resistencia bobina (Ω)'},{key:'Ipull',label:'Corriente de disparo (A)',step:0.002}],
+    capacitive_proximity_sensor:[{key:'Vcc',label:'Voltaje de alimentación (V)',step:1}]
+  };
+  propFieldsFor = function(type){
+    if(EXTRA_FIELDS2[type]) return EXTRA_FIELDS2[type];
+    return _origPropFieldsFor2(type);
+  };
+}
+})();
+</script>
+<script>
+// ============================================================
+// pin-labels.js — Muestra el nombre de cada pin de cada componente
+// Pegar al final, después de todos los demás <script>.
+// ============================================================
+(function(){
+
+  // Guarda la función original de dibujo de componentes
+  const origDrawComponents = drawComponents;
+  let showPinLabels = true;
+
+  drawComponents = function(){
+    origDrawComponents();
+    if(!showPinLabels) return;
+
+    comps.forEach(c=>{
+      c.terminals.forEach((t,ti)=>{
+        const p = termAbs(c, ti);
+        const label = t.name ? t.name : ('P'+ti);
+
+        // Vector desde el centro del componente hacia el terminal,
+        // extendido un poco más para que la etiqueta no tape el pin.
+        const dx = p.x - c.x, dy = p.y - c.y;
+        const dist = Math.hypot(dx,dy) || 1;
+        const ext = 15;
+        const lx = p.x + (dx/dist)*ext;
+        const ly = p.y + (dy/dist)*ext;
+
+        ctx.save();
+        ctx.font = '8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const textW = ctx.measureText(label).width;
+
+        // Pastilla de fondo para que se lea sobre cualquier color
+        ctx.fillStyle = 'rgba(11,15,20,0.88)';
+        ctx.strokeStyle = 'rgba(255,176,46,0.45)';
+        ctx.lineWidth = 1;
+        const padX = 4, padY = 2.5;
+        const bx = lx - textW/2 - padX, by = ly - 6 - padY;
+        const bw = textW + padX*2, bh = 12 + padY;
+        if(ctx.roundRect){
+          ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 4);
+          ctx.fill(); ctx.stroke();
+        } else {
+          ctx.fillRect(bx, by, bw, bh);
+          ctx.strokeRect(bx, by, bw, bh);
+        }
+
+        ctx.fillStyle = '#ffe9c2';
+        ctx.fillText(label, lx, ly);
+        ctx.restore();
+      });
+    });
+  };
+
+  // Botón en la barra superior para mostrar/ocultar las etiquetas
+  const topbar = document.getElementById('topbar');
+  if(topbar){
+    const btn = document.createElement('button');
+    btn.className = 'tbtn on';
+    btn.id = 'btnPinLabels';
+    btn.title = 'Mostrar/ocultar nombres de pines';
+    btn.textContent = '🏷️ Pines';
+    topbar.appendChild(btn);
+    btn.addEventListener('click', ()=>{
+      showPinLabels = !showPinLabels;
+      btn.classList.toggle('on', showPinLabels);
+    });
+  }
+
+})();
+</script>
+<script>
+// ============================================================
+// zoom-y-nuevos-componentes-3.js — Zoom del lienzo + 15 componentes reales
+// Pegar al final, después de todos los demás <script>.
+// ============================================================
+(function(){
+
+// ---------------- ZOOM ----------------
+window.zoomScale = window.zoomScale || 1;
+
+toWorld = function(p){ return {x:(p.x-panX)/zoomScale, y:(p.y-panY)/zoomScale}; };
+
+hitTerminal = function(x,y){
+  const thr = 14/zoomScale;
+  for(let i=comps.length-1;i>=0;i--){
+    const c=comps[i];
+    for(let ti=0; ti<c.terminals.length; ti++){
+      const p = termAbs(c,ti);
+      if(Math.hypot(p.x-x,p.y-y) < thr) return {compId:c.id, term:ti, x:p.x, y:p.y};
+    }
+  }
+  return null;
+};
+
+hitWire = function(x,y){
+  const thr = 10/zoomScale;
+  for(let i=wires.length-1;i>=0;i--){
+    const w=wires[i];
+    const ca=comps.find(c=>c.id===w.a.compId), cb=comps.find(c=>c.id===w.b.compId);
+    if(!ca||!cb) continue;
+    const pa=termAbs(ca,w.a.term), pb=termAbs(cb,w.b.term);
+    const pts = pathForWire(pa,pb);
+    for(let s=1;s<pts.length;s++){
+      if(distToSeg(x,y,pts[s-1][0],pts[s-1][1],pts[s][0],pts[s][1]) < thr) return w;
+    }
+  }
+  return null;
+};
+
+drawGrid = function(){
+  const r = wrap.getBoundingClientRect();
+  ctx.fillStyle = '#0b0f14'; ctx.fillRect(0,0,r.width,r.height);
+  ctx.fillStyle = '#1c2530';
+  const g = GRID*zoomScale;
+  if(g<3) return;
+  let startX = panX % g; if(startX<0) startX+=g;
+  let startY = panY % g; if(startY<0) startY+=g;
+  for(let x=startX;x<r.width;x+=g) for(let y=startY;y<r.height;y+=g) ctx.fillRect(x,y,1,1);
+};
+
+loop = function(now){
+  const dt = Math.min(0.05,(now-lastT)/1000); lastT=now;
+  particlePhase += dt;
+  sim.step(comps, wires, dt);
+  comps.forEach(c=>{
+    if(COMPONENTS[c.type] && COMPONENTS[c.type].momentary && c.props.pressed){
+      c.state._momT = (c.state._momT||0) + dt;
+      if(c.state._momT > 0.25){ c.props.pressed = false; c.state._momT = 0; }
+    }
+  });
+
+  if (scopeActive) {
+     const ch1CompId = document.getElementById('scopeCh1Comp')?.value;
+     const ch1Type = document.getElementById('scopeCh1Type')?.value;
+     const ch2CompId = document.getElementById('scopeCh2Comp')?.value;
+     const ch2Type = document.getElementById('scopeCh2Type')?.value;
+     const v1 = ch1CompId ? (comps.find(c=>c.id===ch1CompId)?.state?.[ch1Type] || 0) : null;
+     const v2 = ch2CompId ? (comps.find(c=>c.id===ch2CompId)?.state?.[ch2Type] || 0) : null;
+     scopeData.push({ t: sim.simTime, v1, v2 });
+     const win = parseFloat(document.getElementById('scopeWinSlider')?.value || 2);
+     while (scopeData.length > 0 && scopeData[0].t < sim.simTime - win - 0.2) scopeData.shift();
+     drawScope();
+  }
+
+  drawGrid();
+  ctx.save();
+  ctx.translate(panX, panY);
+  ctx.scale(zoomScale, zoomScale);
+  drawWires(); drawComponents();
+  ctx.restore();
+  updateStatus();
+  requestAnimationFrame(loop);
+};
+
+function updateZoomLabel(){
+  const lbl = document.getElementById('btnZoomReset');
+  if(lbl) lbl.textContent = Math.round(zoomScale*100)+'%';
+}
+function zoomAt(sp, factor){
+  const world = toWorld(sp);
+  zoomScale = Math.max(0.3, Math.min(3, zoomScale*factor));
+  panX = sp.x - world.x*zoomScale;
+  panY = sp.y - world.y*zoomScale;
+  clampPan();
+  updateZoomLabel();
+}
+
+canvas.addEventListener('wheel', function(ev){
+  ev.preventDefault();
+  zoomAt(getPos(ev), ev.deltaY<0? 1.1 : 1/1.1);
+}, {passive:false});
+
+const topbarZ = document.getElementById('topbar');
+if(topbarZ){
+  const zin = document.createElement('button'); zin.className='tbtn'; zin.id='btnZoomIn'; zin.textContent='🔍+';
+  const zout = document.createElement('button'); zout.className='tbtn'; zout.id='btnZoomOut'; zout.textContent='🔍−';
+  const zreset = document.createElement('button'); zreset.className='tbtn'; zreset.id='btnZoomReset'; zreset.textContent='100%';
+  topbarZ.appendChild(zin); topbarZ.appendChild(zout); topbarZ.appendChild(zreset);
+  zin.addEventListener('click', ()=>{ const r=wrap.getBoundingClientRect(); zoomAt({x:r.width/2,y:r.height/2}, 1.2); });
+  zout.addEventListener('click', ()=>{ const r=wrap.getBoundingClientRect(); zoomAt({x:r.width/2,y:r.height/2}, 1/1.2); });
+  zreset.addEventListener('click', ()=>{ zoomScale=1; updateZoomLabel(); });
+}
+
+// Pellizco (2 dedos) — se intercepta en fase de captura sobre el contenedor
+// para no interferir con el arrastre/colocación de un solo dedo del lienzo.
+let pinchState = null;
+function touchDist(t){ return Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY); }
+function touchMid(t){ return {x:(t[0].clientX+t[1].clientX)/2, y:(t[0].clientY+t[1].clientY)/2}; }
+wrap.addEventListener('touchstart', function(ev){
+  if(ev.touches.length===2){
+    ev.preventDefault(); ev.stopPropagation();
+    const r = canvas.getBoundingClientRect();
+    const mid = touchMid(ev.touches);
+    const sp = {x:mid.x-r.left, y:mid.y-r.top};
+    pinchState = { dist: touchDist(ev.touches), scale0: zoomScale, world: toWorld(sp) };
+  }
+}, {capture:true, passive:false});
+wrap.addEventListener('touchmove', function(ev){
+  if(pinchState && ev.touches.length===2){
+    ev.preventDefault(); ev.stopPropagation();
+    const r = canvas.getBoundingClientRect();
+    const mid = touchMid(ev.touches);
+    const sp = {x:mid.x-r.left, y:mid.y-r.top};
+    const d = touchDist(ev.touches);
+    zoomScale = Math.max(0.3, Math.min(3, pinchState.scale0*(d/pinchState.dist)));
+    panX = sp.x - pinchState.world.x*zoomScale;
+    panY = sp.y - pinchState.world.y*zoomScale;
+    clampPan();
+    updateZoomLabel();
+  }
+}, {capture:true, passive:false});
+wrap.addEventListener('touchend', function(ev){ if(ev.touches.length<2) pinchState=null; }, {capture:true});
+
+// ---------------- 15 COMPONENTES NUEVOS ----------------
+function clamp01(v){ return Math.max(0,Math.min(1,v)); }
+
+const NUEVOS3 = {
+
+tl431_shunt_regulator: { label:'Regulador Shunt TL431', cat:'Módulos', icon:'▽431', props:{Vref:2.5},
+  terminals:[T(-40,-16,'K'),T(-40,16,'A'),T(0,34,'REF')],
+  edges(c){
+    const vref = (c.state?.Vt2||0)-(c.state?.Vt1||0);
+    const on = vref >= c.props.Vref;
+    return [{n:[0,1], type: on?'R':'OPEN', value:3}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,-16],[-14,-16]]); leadLines(ctx,[[-40,16],[-14,16]]); leadLines(ctx,[[0,34],[0,14]]);
+    const vref = (c.state?.Vt2||0)-(c.state?.Vt1||0);
+    const on = vref >= c.props.Vref;
+    ctx.fillStyle= on? '#ffb02e':COL_BODY2;
+    ctx.beginPath(); ctx.moveTo(-14,-14); ctx.lineTo(14,0); ctx.lineTo(-14,14); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(14,-14); ctx.lineTo(14,14); ctx.stroke();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('TL431',0,26);
+  }
+},
+
+bmp280_sensor: { label:'Sensor de Presión BMP280', cat:'Sensores', icon:'📊', props:{pressure:0.5},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,-16,'SDA'),T(30,16,'SCL')],
+  edges(c){ return [{n:[2,1], type:'OPEN', value:1e9},{n:[3,1], type:'OPEN', value:1e9}]; },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]);
+    leadLines(ctx,[[30,-16],[14,-16]]); leadLines(ctx,[[30,16],[14,16]]);
+    const powered = ((c.state.Vt0||0)-(c.state.Vt1||0)) >= 2.7;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-14,-16,28,32);
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('BMP280',0,-2);
+    ctx.fillText(powered? Math.round(950+c.props.pressure*100)+' hPa':'sin VCC',0,10);
+    ctx.font='6px sans-serif'; ctx.fillText('I2C: usa pull-ups',0,26);
+  }
+},
+
+mpu6050_sensor: { label:'Acelerómetro/Giroscopio MPU6050', cat:'Sensores', icon:'⟳XYZ', props:{tilt:0.0},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,-16,'SDA'),T(30,16,'SCL')],
+  edges(c){ return [{n:[2,1], type:'OPEN', value:1e9},{n:[3,1], type:'OPEN', value:1e9}]; },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]);
+    leadLines(ctx,[[30,-16],[14,-16]]); leadLines(ctx,[[30,16],[14,16]]);
+    const powered = ((c.state.Vt0||0)-(c.state.Vt1||0)) >= 2.7;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-14,-16,28,32);
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('MPU6050',0,-2);
+    ctx.fillText(powered? 'inclinación '+Math.round(c.props.tilt*90)+'°':'sin VCC',0,10);
+    ctx.font='6px sans-serif'; ctx.fillText('I2C: usa pull-ups',0,26);
+  }
+},
+
+soil_moisture_sensor: { label:'Sensor de Humedad de Suelo', cat:'Sensores', icon:'🌱R', props:{moisture:0.3, Rmin:500, Rmax:25000},
+  terminals:[T(-40,0),T(40,0)],
+  edges(c){ const R = c.props.Rmax*Math.pow(1-c.props.moisture,2)+c.props.Rmin; return [{n:[0,1],type:'R',value:R}]; },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-22,0]]); leadLines(ctx,[[22,0],[40,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.moveTo(-22,-10); ctx.lineTo(-22,10); ctx.moveTo(22,-10); ctx.lineTo(22,10); ctx.stroke();
+    ctx.fillStyle=`rgba(120,80,40,${0.15+c.props.moisture*0.5})`; ctx.fillRect(-22,-10,44,20);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('humedad '+Math.round(c.props.moisture*100)+'%',0,24);
+  }
+},
+
+uv_sensor: { label:'Sensor UV (ML8511)', cat:'Sensores', icon:'☀UV', props:{uvIndex:0.2, Vmax:2.8},
+  terminals:[T(-30,0,'GND'),T(30,0,'OUT'),T(0,-20,'VCC')],
+  edges(c){
+    const vccV = (c.state.Vt2||0)-(c.state.Vt0||0);
+    if(vccV < 2.7) return [{n:[0,1], type:'OPEN', value:1e9}];
+    return [{n:[0,1], type:'V', value:Math.max(0,c.props.uvIndex*c.props.Vmax), Rint:2}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,0],[-16,0]]); leadLines(ctx,[[16,0],[30,0]]); leadLines(ctx,[[0,-20],[0,-12]]);
+    const powered = ((c.state.Vt2||0)-(c.state.Vt0||0)) >= 2.7;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(-16,-12); ctx.lineTo(16,-12); ctx.lineTo(16,12); ctx.lineTo(-16,12); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('UV',0,3);
+    ctx.font='6.5px sans-serif';
+    ctx.fillText(powered? 'IUV '+(c.props.uvIndex*11).toFixed(1) : 'sin VCC',0,26);
+  }
+},
+
+hx711_load_cell: { label:'Celda de Carga + HX711', cat:'Módulos', icon:'⚖⇄', props:{weight:0.2},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,-16,'DOUT'),T(30,16,'SCK')],
+  edges(c){ return [{n:[2,1], type:'OPEN', value:1e9}]; },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]);
+    leadLines(ctx,[[30,-16],[14,-16]]); leadLines(ctx,[[30,16],[14,16]]);
+    const powered = ((c.state.Vt0||0)-(c.state.Vt1||0)) >= 2.6;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-14,-18,28,36);
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('HX711',0,-2);
+    ctx.fillText(powered? Math.round(c.props.weight*5000)+' g':'sin VCC',0,10);
+    ctx.font='6px sans-serif'; ctx.fillText('DOUT necesita pull-up',0,26);
+  }
+},
+
+rfid_rc522: { label:'Lector RFID (RC522)', cat:'Módulos', icon:'📶ID', props:{cardPresent:false},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,-16,'MISO'),T(30,16,'MOSI')],
+  interactive:true,
+  onTap(c){ c.props.cardPresent = !c.props.cardPresent; },
+  edges(c){ return [{n:[2,1], type:'OPEN', value:1e9}]; },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]);
+    leadLines(ctx,[[30,-16],[14,-16]]); leadLines(ctx,[[30,16],[14,16]]);
+    const powered = ((c.state.Vt0||0)-(c.state.Vt1||0)) >= 3.0;
+    ctx.strokeStyle= (powered && c.props.cardPresent)? COL_WIRE_ON:COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-14,-18,28,36);
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('RC522',0,-2);
+    ctx.fillText(!powered? 'sin VCC' : (c.props.cardPresent?'tarjeta (toca)':'sin tarjeta'),0,10);
+  }
+},
+
+gps_module: { label:'Módulo GPS (NEO-6M)', cat:'Módulos', icon:'📡', props:{hasFix:false},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,-16,'TX'),T(30,16,'RX')],
+  interactive:true,
+  onTap(c){ c.props.hasFix = !c.props.hasFix; },
+  edges(c){ return [{n:[2,1], type:'OPEN', value:1e9}]; },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]);
+    leadLines(ctx,[[30,-16],[14,-16]]); leadLines(ctx,[[30,16],[14,16]]);
+    const powered = ((c.state.Vt0||0)-(c.state.Vt1||0)) >= 3.0;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-14,-18,28,36);
+    const blink = powered && c.props.hasFix && (sim.simTime%1)<0.5;
+    ctx.fillStyle = blink? '#39d3a8':'#1c2530';
+    ctx.beginPath(); ctx.arc(0,-6,3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('NEO-6M',0,10);
+    ctx.font='6px sans-serif'; ctx.fillText(!powered?'sin VCC':(c.props.hasFix?'fix GPS (toca)':'buscando'),0,26);
+  }
+},
+
+a4988_driver: { label:'Driver de Motor Paso a Paso (A4988)', cat:'Módulos', icon:'⇉⚙', props:{Vmot:12, microstep:1},
+  terminals:[T(-40,-24,'VDD'),T(-40,-8,'GND'),T(-40,8,'STEP'),T(-40,24,'DIR'),T(0,-34,'ENABLE'),T(40,-16,'VMOT'),T(40,0,'OUT_A'),T(40,16,'OUT_B')],
+  step(c, dt, sim){
+    const vdd = (c.state.Vt0||0)-(c.state.Vt1||0);
+    const enV = c.state.Vt4||0;
+    const enabled = vdd>=2.7 && enV < 2.0;
+    const stepV = c.state.Vt2||0;
+    const dirV = c.state.Vt3||0;
+    const stepHigh = stepV > vdd/2;
+    if(enabled && stepHigh && !c.state._lastStep) c.state.phase = ((c.state.phase||0)+1)%4;
+    c.state._lastStep = stepHigh;
+    c.state.enabled = enabled;
+    c.state.dir = dirV > vdd/2;
+  },
+  edges(c){
+    const vmot = (c.state.Vt5||0);
+    if(!c.state.enabled) return [{n:[6,1],type:'OPEN',value:1e9},{n:[7,1],type:'OPEN',value:1e9}];
+    const seq = [[1,0],[0,1],[-1,0],[0,-1]];
+    const ph = c.state.phase||0;
+    const [a,b] = seq[ph];
+    return [
+      {n:[6,1], type:'V', value:a*vmot*0.5, Rint:2},
+      {n:[7,1], type:'V', value:b*vmot*0.5, Rint:2}
+    ];
+  },
+  draw(ctx,c){
+    c.terminals.forEach(t=> leadLines(ctx,[[t.x,t.y],[t.x<0? t.x+16:t.x-16, t.y]]));
+    ctx.strokeStyle= c.state?.enabled? COL_WIRE_ON:COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-24,-30,48,60);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('A4988',0,-2);
+    ctx.font='6.5px sans-serif'; ctx.fillText(c.state?.enabled?'fase '+(c.state.phase||0):'deshabilitado',0,10);
+  }
+},
+
+l298n_hbridge: { label:'Puente H (L298N)', cat:'Módulos', icon:'⇄⚙', props:{Vdrop:1.5},
+  terminals:[T(-40,-24,'VS'),T(-40,-8,'GND'),T(-40,8,'IN1'),T(-40,24,'IN2'),T(0,-34,'ENA'),T(40,-12,'OUT1'),T(40,12,'OUT2')],
+  edges(c){
+    const vs = (c.state.Vt0||0)-(c.state.Vt1||0);
+    const en = (c.state.Vt4||0) > 2.0;
+    if(vs<1 || !en) return [{n:[5,1],type:'OPEN',value:1e9},{n:[6,1],type:'OPEN',value:1e9}];
+    const in1 = (c.state.Vt2||0) > vs/2;
+    const in2 = (c.state.Vt3||0) > vs/2;
+    const vout = Math.max(0, vs - c.props.Vdrop);
+    if(in1 && !in2) return [{n:[5,1],type:'V',value:vout,Rint:1},{n:[6,1],type:'V',value:0,Rint:1}];
+    if(in2 && !in1) return [{n:[5,1],type:'V',value:0,Rint:1},{n:[6,1],type:'V',value:vout,Rint:1}];
+    return [{n:[5,1],type:'V',value:0,Rint:1},{n:[6,1],type:'V',value:0,Rint:1}];
+  },
+  draw(ctx,c){
+    c.terminals.forEach(t=> leadLines(ctx,[[t.x,t.y],[t.x<0? t.x+16:t.x-16, t.y]]));
+    const vs=(c.state.Vt0||0)-(c.state.Vt1||0), en=(c.state.Vt4||0)>2.0;
+    ctx.strokeStyle= (vs>=1 && en)? COL_WIRE_ON:COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-24,-30,48,60);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('L298N',0,-2);
+    ctx.font='6.5px sans-serif'; ctx.fillText(!en?'ENA=0':(vs<1?'sin VS':'activo'),0,10);
+  }
+},
+
+battery_18650: { label:'Batería Li-ion 18650 (3.7V)', cat:'Fuentes', icon:'🔋', props:{V:3.7},
+  terminals:[T(-40,0,'-'),T(40,0,'+')],
+  edges(c){ return [{n:[0,1], type:'V', value:c.props.V, Rint:0.15}]; },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-18,0]]); leadLines(ctx,[[18,0],[40,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-18,-11,36,22);
+    ctx.fillStyle='#586576'; ctx.fillRect(15,-5,5,10);
+    ctx.fillStyle='#aab6c4'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('−',-9,4); ctx.fillText('+',9,4);
+    ctx.font='7.5px sans-serif'; ctx.fillText(c.props.V+'V',0,24);
+  }
+},
+
+lipo_3s_battery: { label:'Batería LiPo 3S (11.1V)', cat:'Fuentes', icon:'🔋3S', props:{V:11.1},
+  terminals:[T(-40,0,'-'),T(40,0,'+')],
+  edges(c){ return [{n:[0,1], type:'V', value:c.props.V, Rint:0.3}]; },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-20,-13,40,26);
+    ctx.fillStyle='#aab6c4'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('−',-10,4); ctx.fillText('+',10,4);
+    ctx.font='7.5px sans-serif'; ctx.fillText(c.props.V+'V (3S)',0,26);
+  }
+},
+
+shunt_resistor: { label:'Resistencia Shunt (medición)', cat:'Medición', icon:'▭mΩ', props:{R:0.01},
+  terminals:[T(-40,0),T(40,0)],
+  edges(c){ return [{n:[0,1], type:'R', value:Math.max(0.001,c.props.R), tag:'meter'}]; },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2.4; ctx.strokeRect(-20,-8,40,16);
+    ctx.fillStyle='#aab6c4'; ctx.font='7.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText((c.props.R*1000).toFixed(1)+' mΩ', 0, 22);
+    ctx.font='7px sans-serif'; ctx.fillText(fmtVolt(c.state?.V||0)+' caída', 0, 32);
+  }
+},
+
+buck_boost_converter: { label:'Convertidor Buck-Boost', cat:'Módulos', icon:'⇅5V', props:{Vset:12, eta:0.9},
+  terminals:[T(-40,-16,'VIN+'),T(-40,16,'VIN-'),T(40,-16,'VOUT+'),T(40,16,'VOUT-')],
+  edges(c){
+    const vin = (c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vin <= 1) return [{n:[2,3], type:'OPEN', value:1e9}];
+    const vout = c.props.Vset*c.props.eta;
+    return [{n:[2,3], type:'V', value:vout, Rint:0.5}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,-16],[-16,-16]]); leadLines(ctx,[[-40,16],[-16,16]]);
+    leadLines(ctx,[[16,-16],[40,-16]]); leadLines(ctx,[[16,16],[40,16]]);
+    ctx.strokeStyle='#b366ff'; ctx.lineWidth=2; ctx.strokeRect(-16,-20,32,40);
+    ctx.fillStyle='rgba(179,102,255,.15)'; ctx.fillRect(-16,-20,32,40);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('B-BOOST',0,-2); ctx.font='7px sans-serif'; ctx.fillText((c.props.Vset*c.props.eta).toFixed(1)+'V',0,10);
+  }
+},
+
+hall_linear_sensor: { label:'Sensor Hall Lineal (analógico)', cat:'Sensores', icon:'⌘V', props:{field:0, sensitivity:1.0, Vcc:5},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,0,'OUT')],
+  edges(c){
+    const vccV = c.state.Vt0||0;
+    if(vccV < 3.0) return [{n:[2,'GND'], type:'OPEN', value:1e9}];
+    const vout = clamp01(0.5 + c.props.field*0.5*c.props.sensitivity) * c.props.Vcc;
+    return [{n:[2,'GND'], type:'V', value:vout, Rint:5}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]); leadLines(ctx,[[30,0],[14,0]]);
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-14,-18,28,36);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('HALL',0,-2);
+    ctx.font='6.5px sans-serif'; ctx.fillText('campo '+(c.props.field>=0?'+':'')+Math.round(c.props.field*100)+'%',0,10);
+  }
+}
+
+};
+
+Object.assign(COMPONENTS, NUEVOS3);
+
+if(typeof propFieldsFor === 'function'){
+  const _origPropFieldsFor3 = propFieldsFor;
+  const EXTRA_FIELDS3 = {
+    tl431_shunt_regulator:[{key:'Vref',label:'Voltaje de referencia (V)',step:0.1}],
+    bmp280_sensor:[{key:'pressure',label:'Presión simulada',type:'range'}],
+    mpu6050_sensor:[{key:'tilt',label:'Inclinación simulada',type:'range'}],
+    soil_moisture_sensor:[{key:'moisture',label:'Humedad del suelo',type:'range'}],
+    uv_sensor:[{key:'uvIndex',label:'Índice UV simulado',type:'range'}],
+    hx711_load_cell:[{key:'weight',label:'Peso simulado',type:'range'}],
+    a4988_driver:[{key:'Vmot',label:'Voltaje de motor (V)',step:0.5}],
+    l298n_hbridge:[{key:'Vdrop',label:'Caída de voltaje interna (V)',step:0.1}],
+    battery_18650:[{key:'V',label:'Voltaje (V)',step:0.1}],
+    lipo_3s_battery:[{key:'V',label:'Voltaje (V)',step:0.1}],
+    shunt_resistor:[{key:'R',label:'Resistencia (Ω)',step:0.001}],
+    buck_boost_converter:[{key:'Vset',label:'Vout objetivo (V)',step:0.5},{key:'eta',label:'Eficiencia η',type:'range'}],
+    hall_linear_sensor:[{key:'field',label:'Campo magnético (-1 a 1)',step:0.05},{key:'sensitivity',label:'Sensibilidad',step:0.1}]
+  };
+  propFieldsFor = function(type){
+    if(EXTRA_FIELDS3[type]) return EXTRA_FIELDS3[type];
+    return _origPropFieldsFor3(type);
+  };
+}
+
+})();
+</script>
+<script>
+// ============================================================
+// pantallas-realistas.js — Rediseña TFT, LCD 16x2 y Display 7 Seg.
+// para que parezcan pantallas reales al colocarlas en el lienzo.
+// Pegar al final, después de todos los demás <script>.
+// ============================================================
+(function(){
+
+function roundRectPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+// ---------------- TFT SPI (ILI9341) ----------------
+if(COMPONENTS.tft_display){
+COMPONENTS.tft_display.draw = function(ctx,c,sim){
+  const VccV = c.state.Vt0||0;
+  const GndV = c.state.Vt1||0;
+  const ledV = c.state.Vt7||0;
+  const csV  = c.state.Vt2||0;
+  const sckV = c.state.Vt6||0;
+  const sdiV = c.state.Vt5||0;
+
+  const powered   = (VccV - GndV) > 3.0;
+  const backlight = powered || (ledV - GndV) > 2.0;
+  const receiving = backlight && csV < 1.0 && sckV > 2.0;
+
+  c.terminals.forEach(t=> leadLines(ctx,[[t.x,t.y],[t.x<0? t.x+6:t.x-6, t.y]]));
+
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=6; ctx.shadowOffsetY=2;
+  ctx.fillStyle='#12211a';
+  roundRectPath(ctx,-24,-46,48,92,5);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='#2a3a2c'; ctx.lineWidth=1.2;
+  roundRectPath(ctx,-24,-46,48,92,5); ctx.stroke();
+
+  ctx.fillStyle='#050807';
+  [[-19,-40],[19,-40],[-19,40],[19,40]].forEach(([x,y])=>{
+    ctx.beginPath(); ctx.arc(x,y,2,0,Math.PI*2); ctx.fill();
+  });
+
+  ctx.fillStyle='#050608';
+  roundRectPath(ctx,-18,-38,36,76,3); ctx.fill();
+
+  const gx=-14, gy=-34, gw=28, gh=68;
+  ctx.save();
+  roundRectPath(ctx,gx,gy,gw,gh,2); ctx.clip();
+
+  if(!backlight){
+    ctx.fillStyle='#04070a'; ctx.fillRect(gx,gy,gw,gh);
+  } else {
+    const grad = ctx.createLinearGradient(gx,gy,gx,gy+gh);
+    grad.addColorStop(0,'#1c3a5e'); grad.addColorStop(1,'#0d1e33');
+    ctx.fillStyle=grad; ctx.fillRect(gx,gy,gw,gh);
+
+    if(receiving){
+      const lineH = 3, nLines = Math.floor(gh/lineH);
+      for(let i=0;i<nLines;i++){
+        const phase = (sim.simTime*6 + i*0.15) % 1;
+        const hue = (i*37 + sim.simTime*120) % 360;
+        ctx.fillStyle = sdiV>2.0 ? `hsl(${hue},70%,55%)` : `hsl(${hue},20%,30%)`;
+        ctx.globalAlpha = 0.55 + 0.45*Math.sin(phase*Math.PI);
+        ctx.fillRect(gx, gy+i*lineH, gw, lineH-0.4);
+      }
+      ctx.globalAlpha=1;
+      ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(gx,gy+gh-9,gw,9);
+      ctx.fillStyle='#e7edf5'; ctx.font='5px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('SPI RX', gx+gw/2, gy+gh-3);
+    } else {
+      ctx.fillStyle='rgba(255,255,255,.08)'; ctx.fillRect(gx,gy,gw,6);
+      ctx.fillStyle='#cfe8ff'; ctx.font='4.5px sans-serif'; ctx.textAlign='left';
+      ctx.fillText('12:30', gx+1.5, gy+4.5);
+      ctx.textAlign='right'; ctx.fillText('▮▮▮', gx+gw-1.5, gy+4.5);
+
+      ctx.fillStyle='#e7edf5'; ctx.font='bold 5.5px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('TFT 2.4"', gx+gw/2, gy+gh/2-3);
+      ctx.fillStyle='#7fb8ff'; ctx.font='4.5px sans-serif';
+      ctx.fillText('ILI9341', gx+gw/2, gy+gh/2+5);
+
+      const icoY = gy+gh-13;
+      [['#ff5c5c',-8],['#39d3a8',0],['#ffb02e',8]].forEach(([col,dx])=>{
+        ctx.fillStyle=col; roundRectPath(ctx,gx+gw/2+dx-2.6,icoY,5.2,5.2,1.2); ctx.fill();
+      });
+    }
+  }
+  ctx.restore();
+
+  ctx.save();
+  roundRectPath(ctx,gx,gy,gw,gh,2); ctx.clip();
+  const shine = ctx.createLinearGradient(gx,gy,gx+gw*0.6,gy+gh*0.6);
+  shine.addColorStop(0,'rgba(255,255,255,.18)');
+  shine.addColorStop(0.4,'rgba(255,255,255,.03)');
+  shine.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=shine;
+  ctx.beginPath();
+  ctx.moveTo(gx,gy); ctx.lineTo(gx+gw*0.55,gy); ctx.lineTo(gx,gy+gh*0.7); ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  ctx.beginPath(); ctx.arc(0,42,1.6,0,Math.PI*2);
+  ctx.fillStyle = powered? '#39d3a8' : '#2a2f28';
+  ctx.fill();
+
+  ctx.fillStyle='#8a97a8'; ctx.font='6px sans-serif';
+  ctx.textAlign='right';
+  ctx.fillText('VCC', -26, -28);
+  ctx.fillText('GND', -26, -8);
+  ctx.fillText('CS', -26, 12);
+  ctx.fillText('RST', -26, 32);
+
+  ctx.textAlign='left';
+  ctx.fillText('DC', 26, -28);
+  ctx.fillText('SDI', 26, -8);
+  ctx.fillText('SCK', 26, 12);
+  ctx.fillText('LED', 26, 32);
+};
+}
+
+// ---------------- LCD 16x2 (HD44780) ----------------
+if(COMPONENTS.lcd_1602){
+COMPONENTS.lcd_1602.draw = function(ctx,c,sim){
+  const on = Math.abs(c.state?.I||0) > 0.003;
+  leadLines(ctx,[[-40,0],[-24,0]]); leadLines(ctx,[[24,0],[40,0]]);
+
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=5; ctx.shadowOffsetY=2;
+  ctx.fillStyle='#123018';
+  roundRectPath(ctx,-24,-16,48,32,3); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='#1c4530'; ctx.lineWidth=1; roundRectPath(ctx,-24,-16,48,32,3); ctx.stroke();
+
+  // header de pines a lo largo del borde inferior
+  ctx.fillStyle='#c7b26a';
+  for(let i=0;i<16;i++){ ctx.fillRect(-21.5+i*2.7,13,1.5,2.6); }
+
+  // potenciómetro de contraste (esquina)
+  ctx.fillStyle='#2a3a44'; ctx.beginPath(); ctx.arc(19,-12,3.2,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#556274'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(19,-12); ctx.lineTo(21.5,-13.5); ctx.stroke();
+
+  // vidrio / pantalla
+  const gx=-20, gy=-13, gw=40, gh=22;
+  ctx.fillStyle = on ? '#2a5a22' : '#132a1a';
+  roundRectPath(ctx,gx,gy,gw,gh,1); ctx.fill();
+
+  if(on){
+    const cols=16, cw=gw/cols;
+    // renglón de caracteres simulado (bloques de puntos por carácter)
+    for(let col=0; col<cols; col++){
+      const cx = gx+col*cw+cw/2;
+      ctx.fillStyle='rgba(200,255,180,.35)';
+      for(let px=-1;px<=1;px++) for(let py=-2;py<=2;py++){
+        ctx.fillRect(cx+px*1.1-0.4, gy+7+py*1.4-0.4, 0.8,0.8);
+      }
+    }
+    // cursor parpadeante en el primer carácter
+    if((sim.simTime%1)<0.5){
+      ctx.fillStyle='rgba(210,255,190,.85)';
+      ctx.fillRect(gx+1, gy+gh-4, cw-2, 2);
+    }
+    ctx.fillStyle='#d7ffbe'; ctx.font='bold 6px monospace'; ctx.textAlign='left';
+    ctx.fillText('LCD 16x2', gx+2, gy+8);
+  }
+
+  // brillo sutil del vidrio
+  ctx.save();
+  roundRectPath(ctx,gx,gy,gw,gh,1); ctx.clip();
+  ctx.fillStyle='rgba(255,255,255,.06)';
+  ctx.beginPath(); ctx.moveTo(gx,gy); ctx.lineTo(gx+gw*0.35,gy); ctx.lineTo(gx,gy+gh*0.7); ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(on?'LCD 16x2 ON':'LCD 16x2', 0, 26);
+};
+}
+
+// ---------------- Display 7 Segmentos ----------------
+if(COMPONENTS.sevenseg){
+COMPONENTS.sevenseg.draw = function(ctx,c){
+  const on = Math.abs(c.state?.I||0) > 0.005;
+
+  leadLines(ctx,[[-40,0],[-20,0]]); leadLines(ctx,[[20,0],[40,0]]);
+
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=4; ctx.shadowOffsetY=1;
+  ctx.fillStyle='#0a0a0a';
+  roundRectPath(ctx,-20,-20,40,40,3); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='#222'; ctx.lineWidth=1; roundRectPath(ctx,-20,-20,40,40,3); ctx.stroke();
+
+  // ventana difusora gris oscura
+  ctx.fillStyle='#161616';
+  roundRectPath(ctx,-16,-17,32,34,2); ctx.fill();
+
+  const off = 'rgba(120,20,20,.28)';
+  const onCol = '#ff2b2b';
+  function seg(x1,y1,x2,y2){
+    ctx.strokeStyle = on? onCol : off;
+    ctx.lineWidth=3.4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  }
+  if(on){ ctx.save(); ctx.shadowColor='rgba(255,40,40,.85)'; ctx.shadowBlur=6; }
+  seg(-11,-14,10,-14);   // a — arriba
+  seg(11,-13,11,-1);     // b — arriba derecha
+  seg(11,1,11,13);       // c — abajo derecha
+  seg(-11,15,10,15);     // d — abajo
+  seg(-12,1,-12,13);     // e — abajo izquierda
+  seg(-12,-13,-12,-1);   // f — arriba izquierda
+  seg(-9,0,9,0);         // g — centro
+  if(on) ctx.restore();
+
+  // punto decimal
+  ctx.beginPath(); ctx.arc(15,15,1.6,0,Math.PI*2);
+  ctx.fillStyle = on? onCol : off; ctx.fill();
+
+  ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(on?'ENCENDIDO':'display 7 seg.', 0, 30);
+};
+}
+
+})();
+</script>
+<script>
+// ============================================================
+// pines-7seg-y-panel-info.js — Corrige los pines del display de
+// 7 segmentos y añade un botón "ℹ️ Info" que explica el
+// funcionamiento del componente seleccionado.
+// Pegar al final, después de todos los demás <script>.
+// ============================================================
+(function(){
+
+// ------------------------------------------------------------
+// PARTE 1 — Display de 7 segmentos con pines reales
+// (cátodo común: a,b,c,d,e,f,g,dp + 2 pines COM internos)
+// ------------------------------------------------------------
+COMPONENTS.sevenseg = {
+  label:'Display 7 Segmentos (cátodo común)', cat:'Salida', icon:'8',
+  props:{ R:150 },
+  terminals:[
+    T(-40,-32,'a'), T(-40,-16,'f'), T(-40,0,'COM'), T(-40,16,'e'), T(-40,32,'d'),
+    T(40,-32,'b'),  T(40,-16,'COM2'), T(40,0,'g'), T(40,16,'c'), T(40,32,'dp')
+  ],
+  edges(c){
+    const R = Math.max(1, c.props.R);
+    return [
+      {n:[2,6], type:'R', value:0.01},          // une los dos pines COM internamente
+      {n:[0,2], type:'R', value:R, tag:'a'},
+      {n:[1,2], type:'R', value:R, tag:'f'},
+      {n:[3,2], type:'R', value:R, tag:'e'},
+      {n:[4,2], type:'R', value:R, tag:'d'},
+      {n:[5,6], type:'R', value:R, tag:'b'},
+      {n:[7,6], type:'R', value:R, tag:'g'},
+      {n:[8,6], type:'R', value:R, tag:'c'},
+      {n:[9,6], type:'R', value:R, tag:'dp'}
+    ];
+  },
+  draw(ctx,c){
+    const on = seg => Math.abs(c.state?.['I_'+seg]||0) > 0.0008;
+    c.terminals.forEach(t=>{
+      const bx = t.x<0? -18 : 18;
+      leadLines(ctx,[[t.x,t.y],[bx,t.y]]);
+    });
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6;
+    ctx.strokeRect(-18,-36,36,72);
+    ctx.fillStyle='#0d1219'; ctx.fillRect(-14,-30,28,56);
+    function seg(onFlag,x1,y1,x2,y2){
+      ctx.strokeStyle = onFlag? '#ff3b3b':'#3a1414';
+      ctx.lineWidth=3; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    }
+    seg(on('a'), -9,-20, 9,-20);
+    seg(on('b'), 10,-19, 10,-1);
+    seg(on('c'), 10, 1, 10,19);
+    seg(on('d'), -9, 20, 9, 20);
+    seg(on('e'), -10, 1,-10,19);
+    seg(on('f'), -10,-19,-10,-1);
+    seg(on('g'), -8, 0, 8, 0);
+    ctx.beginPath(); ctx.arc(14,20,1.8,0,Math.PI*2);
+    ctx.fillStyle = on('dp')? '#ff3b3b':'#3a1414'; ctx.fill();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('7-SEG', 0, 44);
+  }
+};
+
+if(typeof propFieldsFor === 'function'){
+  const _origPropFieldsFor4 = propFieldsFor;
+  propFieldsFor = function(type){
+    if(type==='sevenseg') return [{key:'R', label:'Resistencia por segmento (Ω)'}];
+    return _origPropFieldsFor4(type);
+  };
+}
+
+// ------------------------------------------------------------
+// PARTE 2 — Botón "ℹ️ Info" con explicación del componente
+// ------------------------------------------------------------
+const CATEGORY_INFO = {
+  'Fuentes':'Entrega energía eléctrica (voltaje o corriente) al resto del circuito.',
+  'Pasivos':'Componente pasivo: no amplifica ni genera energía, solo la almacena, la disipa o se opone al paso de la corriente.',
+  'Control':'Se usa para controlar, interrumpir, proteger o conmutar el paso de la corriente.',
+  'Semiconductores':'Dispositivo semiconductor: permite controlar la corriente de forma no lineal (encendido/apagado, amplificación, rectificación).',
+  'Salida':'Transforma la energía eléctrica en otra forma útil: luz, sonido, movimiento o calor.',
+  'Sensores':'Convierte una magnitud física (luz, temperatura, distancia, humedad, etc.) en una señal eléctrica.',
+  'Medición':'Instrumento para medir una magnitud eléctrica del circuito (voltaje, corriente o resistencia).',
+  'Lógica':'Circuito digital que procesa señales altas/bajas (1 y 0) según una función lógica.',
+  'Módulos':'Módulo integrado que combina varios componentes para cumplir una función completa.'
+};
+
+const COMPONENT_INFO = {
+  resistor:'Limita el paso de la corriente. A mayor resistencia (Ω), menos corriente circula para un mismo voltaje (Ley de Ohm: V = I·R).',
+  potentiometer:'Resistencia variable de 3 terminales. El cursor (wiper) divide la resistencia total en dos partes según su posición, permitiendo ajustar voltaje o actuar como divisor de tensión.',
+  rheostat:'Resistencia variable de 2 terminales usada para limitar corriente de forma ajustable.',
+  capacitor:'Almacena energía en forma de campo eléctrico. Se carga con voltaje aplicado y se descarga al retirarlo; bloquea la corriente continua estable y deja pasar variaciones (AC).',
+  electrolytic_capacitor:'Capacitor polarizado de mayor capacidad. Debe respetar la polaridad (+/−); si se invierte o se excede su voltaje máximo puede dañarse.',
+  inductor:'Bobina que se opone a cambios bruscos de corriente almacenando energía en un campo magnético. Se comporta casi como un cortocircuito en DC estable.',
+  crystal:'Cristal de cuarzo que vibra a una frecuencia muy precisa; referencia de tiempo (reloj) para microcontroladores.',
+  battery:'Fuente de voltaje continuo (DC) con polaridad fija (+ y −).',
+  aa_battery:'Pila cilíndrica común de 1.5V, fuente de energía DC portátil.',
+  coin_cell:'Pila botón de 3V típica para relojes y memorias de respaldo.',
+  battery_18650:'Batería recargable de Litio de 3.7V nominales, muy usada en proyectos portátiles.',
+  lipo_3s_battery:'Batería LiPo de 3 celdas en serie (11.1V nominales), usada en drones y robótica de potencia.',
+  acsource:'Fuente de voltaje alterno (AC): cambia de signo periódicamente según su frecuencia.',
+  solar_panel:'Genera voltaje DC a partir de la luz incidente; a más luz, más energía puede entregar.',
+  usb_port:'Fuente de 5V típica de un puerto USB.',
+  led:'Diodo emisor de luz: se enciende con corriente en el sentido correcto (ánodo→cátodo) y se daña si se supera su corriente máxima.',
+  rgb_led:'LED con tres colores en un mismo encapsulado y cátodo común; combinando intensidades se generan distintos colores.',
+  bulb:'Bombilla incandescente: convierte la corriente en luz y calor mediante un filamento resistivo.',
+  neon_lamp:'Se enciende solo cuando el voltaje supera un umbral (~60-90V), típica en indicadores de alto voltaje.',
+  buzzer:'Zumbador que emite sonido al circular corriente por él.',
+  active_buzzer:'Zumbador con oscilador interno: suena con solo aplicar un DC continuo.',
+  passive_buzzer:'Zumbador sin oscilador interno: necesita una señal alterna (PWM/AC) para sonar.',
+  motor:'Motor DC: convierte energía eléctrica en movimiento rotativo; su velocidad depende del voltaje aplicado.',
+  fan:'Ventilador DC: gira al recibir corriente.',
+  fan_12v:'Ventilador de 12V; su velocidad depende del voltaje real respecto a su nominal.',
+  servo:'Motor con control de posición angular mediante una señal PWM en el pin SIG.',
+  stepper_motor:'Gira en pasos discretos según el orden de energizado de sus bobinas; permite control preciso de posición.',
+  vibration_motor:'Motor pequeño con masa descentrada que genera vibración al girar.',
+  solenoid:'Bobina que atrae un émbolo metálico al energizarse, generando movimiento lineal.',
+  relay:'Interruptor electromecánico: la bobina, al energizarse, mueve un contacto que abre/cierra otro circuito aislado.',
+  relay_module:'Módulo de relé típico: normalmente se activa con nivel BAJO en IN (lógica invertida).',
+  solid_state_relay:'Relé de estado sólido: conmuta la carga con electrónica de potencia, con aislamiento total entre control y carga.',
+  power_contactor:'Contactor de potencia: la bobina, al energizarse, cierra varios contactos de fuerza a la vez.',
+  switch_sw:'Interruptor simple: alterna entre abierto/cerrado y mantiene el estado.',
+  pushbutton:'Pulsador normalmente abierto: solo conduce mientras se mantiene presionado.',
+  pushbutton_nc:'Pulsador normalmente cerrado: conduce en reposo y se abre al presionarlo (paro de emergencia).',
+  dip_switch:'Conjunto de interruptores en miniatura para configuración fija.',
+  switch_spdt:'Interruptor de un polo y dos posiciones: conecta el común a una de dos salidas.',
+  dpdt_switch:'Interruptor doble de dos posiciones: conmuta dos circuitos a la vez (p. ej. invertir giro de un motor).',
+  reed_switch:'Se cierra al acercarle un imán.',
+  tilt_switch:'Cambia de estado según la inclinación del dispositivo.',
+  limit_switch:'Interruptor mecánico de palanca; detecta el fin de carrera de un mecanismo (COM/NO/NC).',
+  fuse:'Se funde permanentemente si la corriente supera su valor máximo.',
+  resettable_fuse:'Fusible rearmable (PTC): limita la corriente al calentarse y se restablece solo al enfriarse.',
+  thermal_fuse:'Fusible térmico de un solo uso: se funde permanentemente al alcanzar cierta temperatura.',
+  circuit_breaker:'Disyuntor: se dispara al superar la corriente máxima y se rearma manualmente tocándolo.',
+  diode:'Deja pasar la corriente en un solo sentido cuando el voltaje supera su tensión directa (Vf).',
+  zener:'En inversa conduce al alcanzar su voltaje zener, útil para regular o fijar un voltaje.',
+  schottky:'Caída de voltaje directa muy baja y conmutación rápida; usado en fuentes y protección.',
+  tvs_diode:'Permanece en alta impedancia normalmente y conduce bruscamente para recortar picos de voltaje.',
+  transistor_npn:'Una pequeña corriente en la base permite el paso de una corriente mayor entre colector y emisor.',
+  transistor_pnp:'Igual que el NPN pero conduce cuando el emisor está más positivo que la base.',
+  darlington:'Dos transistores en cascada: multiplica la ganancia, controla cargas grandes con señales muy pequeñas.',
+  mosfet_n:'Conduce entre drenador y fuente cuando Vgs supera su umbral; ideal para conmutar potencia con baja resistencia.',
+  mosfet_p:'Conduce cuando la fuente está más positiva que el gate por encima del umbral; típico en el lado positivo de una carga.',
+  igbt:'Combina el control fácil de un MOSFET con la capacidad de potencia de un bipolar.',
+  scr:'Se "enclava" en conducción con un pulso en el gate y sigue conduciendo hasta caer bajo su corriente de mantenimiento.',
+  triac:'Como el SCR pero conduce en ambos sentidos; controla cargas de corriente alterna.',
+  optocoupler:'Aísla dos circuitos: un LED interno enciende un fototransistor, transmitiendo la señal sin conexión eléctrica.',
+  moc3021_optocoupler:'Optoacoplador para disparar TRIACs, aislando el microcontrolador del circuito de potencia.',
+  photodiode:'Genera una pequeña corriente proporcional a la luz recibida.',
+  phototransistor:'A más luz incidente, menor resistencia entre colector y emisor.',
+  rectifier_bridge:'Convierte AC en DC pulsante usando 4 diodos.',
+  transformer:'Transforma un voltaje AC de entrada en otro de salida según su relación de vueltas.',
+  voltage_regulator:'Mantiene un voltaje de salida constante si la entrada tiene suficiente margen (dropout).',
+  lm7805_regulator:'Regulador lineal de 5V fijos, requiere ~2V extra de margen en la entrada.',
+  dcdc:'Convertidor conmutado tipo reductor (buck): baja el voltaje con buena eficiencia.',
+  xl4015:'Módulo convertidor DC-DC reductor ajustable de alta corriente.',
+  lm2596:'Módulo convertidor DC-DC reductor ajustable de uso muy común.',
+  buck_boost_converter:'Puede subir o bajar el voltaje de entrada según se necesite.',
+  ldr:'Fotoresistencia: su resistencia baja cuando aumenta la luz.',
+  ntc:'Su resistencia disminuye al aumentar la temperatura.',
+  ptc:'Su resistencia aumenta al aumentar la temperatura.',
+  mic:'Convierte el sonido captado en una variación de resistencia/señal.',
+  gas_sensor:'Su resistencia varía según la concentración de gas detectada.',
+  hygrometer:'Su resistencia varía según la humedad ambiental.',
+  soil_moisture_sensor:'Mide la humedad de la tierra por conductividad entre sus electrodos.',
+  rain_sensor:'Detecta lluvia por la conductividad del agua sobre sus pistas expuestas.',
+  water_level_sensor:'Detecta el nivel de un líquido según qué tan sumergidas están sus pistas.',
+  flex_sensor:'Su resistencia aumenta al doblarlo.',
+  hall_sensor:'Sensor digital que detecta la presencia de un campo magnético cercano.',
+  hall_linear_sensor:'Sensor Hall analógico: su voltaje es proporcional a la intensidad del campo magnético.',
+  flame_sensor:'Detecta la luz infrarroja de una llama; su salida suele ser activa en bajo.',
+  smoke_detector:'Genera alarma cuando el humo detectado supera un umbral.',
+  distance_sensor:'Sensor IR: su voltaje varía según qué tan cerca esté un objeto.',
+  ultrasonic_sensor:'Mide distancia enviando un pulso por TRIG y midiendo el retorno por ECHO.',
+  pir_sensor:'Detecta movimiento de fuentes de calor mediante radiación infrarroja.',
+  joystick:'Dos potenciómetros (X,Y) informan la posición de la palanca, más un pulsador integrado.',
+  rotary_encoder:'Genera pulsos en CLK/DT al girar y tiene un pulsador integrado (SW).',
+  thermocouple:'Genera un pequeño voltaje según la diferencia de temperatura entre sus uniones.',
+  lm35:'Entrega un voltaje proporcional a la temperatura (~10mV/°C).',
+  dht11_sensor:'Sensor digital de temperatura/humedad; su pin de datos requiere una resistencia pull-up externa.',
+  bmp280_sensor:'Sensor de presión/altitud por bus I2C (SDA/SCL, requiere pull-ups).',
+  mpu6050_sensor:'Acelerómetro + giroscopio para medir inclinación y movimiento, por I2C.',
+  uv_sensor:'Entrega un voltaje proporcional a la radiación ultravioleta detectada.',
+  hx711_load_cell:'Amplificador de precisión para celdas de carga: convierte el peso en señal digital (DOUT/SCK).',
+  rfid_rc522:'Lector de tarjetas RFID que se comunica por SPI.',
+  gps_module:'Módulo de posicionamiento satelital: envía ubicación por TX en formato serie.',
+  inductive_proximity_sensor:'Detecta objetos metálicos cercanos sin contacto físico.',
+  capacitive_proximity_sensor:'Detecta la cercanía de casi cualquier material por cambios de capacitancia.',
+  ammeter:'Mide la corriente que circula por él; se conecta en serie.',
+  voltmeter:'Mide el voltaje entre sus terminales; se conecta en paralelo.',
+  multimeter:'Puede medir voltaje, corriente o resistencia según el modo.',
+  current_sensor_acs712:'Mide corriente sin interrumpir el circuito: entrega un voltaje proporcional a la corriente.',
+  shunt_resistor:'Resistencia muy baja y precisa: se mide su caída de voltaje para calcular la corriente.',
+  gate_and:'Salida en 1 solo si ambas entradas están en 1.',
+  gate_or:'Salida en 1 si al menos una entrada está en 1.',
+  gate_nand:'Salida en 1 excepto cuando ambas entradas están en 1.',
+  gate_nor:'Salida en 1 solo cuando ambas entradas están en 0.',
+  gate_xor:'Salida en 1 solo cuando las entradas son distintas entre sí.',
+  gate_xnor:'Salida en 1 solo cuando ambas entradas son iguales.',
+  gate_not:'Invierte el estado de la entrada (0→1, 1→0).',
+  gate_buffer:'Repite la señal de entrada en la salida, reforzándola.',
+  sr_latch:'Guarda un estado (Q): se pone en 1 con S, en 0 con R.',
+  comparator:'Su salida (colector abierto) conduce a tierra cuando in- es mayor que in+ (necesita pull-up externo).',
+  schmitt_trigger:'Como un inversor pero con histéresis: evita parpadeos con señales ruidosas o lentas.',
+  timer555:'Genera pulsos (monoestable) u oscilaciones (astable) según R1/R2/C externos.',
+  opamp:'Amplifica la diferencia entre sus entradas (+/−), limitado por sus rieles de alimentación.',
+  lm386_amplifier:'Amplificador de audio de baja potencia con alimentación única.',
+  tl431_shunt_regulator:'Conduce entre cátodo y ánodo cuando el voltaje en REF supera su referencia (2.5V típico).',
+  arduino:'Microcontrolador programable: ejecuta tu código (setup/loop) y controla sus pines en consecuencia.',
+  l298n_hbridge:'Puente H: controla la dirección de giro de un motor DC según IN1/IN2, habilitado por ENA.',
+  a4988_driver:'Avanza un paso del motor cada vez que STEP pasa de bajo a alto; DIR define el sentido.',
+  tp4056_charger:'Carga una batería de litio mientras haya suficiente voltaje en la entrada USB.',
+  bluetooth_module:'Comunicación inalámbrica Bluetooth (TX/RX serie).',
+  wifi_module:'Comunicación WiFi; requiere EN en alto para operar.',
+  rtc_module:'Reloj en tiempo real que mantiene la hora incluso sin alimentación principal.',
+  lcd_1602:'Pantalla de caracteres 16x2; aquí se enciende su retroiluminación según la corriente recibida.',
+  tft_display:'Pantalla gráfica a color por bus SPI (CS, SCK, SDI, DC).',
+  sevenseg:'Muestra dígitos combinando 7 segmentos (a-g) + punto decimal (dp); cada segmento se enciende de forma independiente respecto al común (COM).',
+  heatsink:'No participa eléctricamente; ayuda a enfriar componentes de potencia cercanos.',
+  peltier_cell:'Un lado se enfría y el otro se calienta según el sentido de la corriente que circula.'
+};
+
+const PIN_MEANINGS = [
+  [/^VCC$|^VDD$|^5V$|^VIN$/i, 'Alimentación positiva'],
+  [/^GND$|^COM2?$|^-$/i, 'Tierra / referencia negativa (0V)'],
+  [/^\+$/, 'Terminal positivo'],
+  [/^OUT(PUT)?\d?$/i, 'Salida de la señal'],
+  [/^IN\d?$/i, 'Entrada de control'],
+  [/^TRIG$/i, 'Pulso de disparo (trigger)'],
+  [/^ECHO$/i, 'Retorno del pulso (eco)'],
+  [/^SDA$/i, 'Datos del bus I2C (necesita pull-up)'],
+  [/^SCL$/i, 'Reloj del bus I2C (necesita pull-up)'],
+  [/^TX$/i, 'Transmisión de datos serie'],
+  [/^RX$/i, 'Recepción de datos serie'],
+  [/^EN(ABLE)?$/i, 'Habilitación del módulo/driver'],
+  [/^DATA$/i, 'Línea de datos (a veces requiere pull-up)'],
+  [/^CLK$|^SCK$/i, 'Señal de reloj'],
+  [/^DIR$/i, 'Define el sentido de giro'],
+  [/^STEP$/i, 'Pulso que avanza un paso del motor'],
+  [/^MISO$/i, 'Datos del esclavo al maestro (SPI)'],
+  [/^MOSI$|^SDI$/i, 'Datos del maestro al esclavo (SPI)'],
+  [/^CS$/i, 'Selección de chip (SPI)'],
+  [/^RST$/i, 'Reinicio (reset)'],
+  [/^gate$/i, 'Control del transistor/tiristor'],
+  [/^base$/i, 'Controla el paso de corriente colector-emisor'],
+  [/^colector$/i, 'Terminal de mayor voltaje del transistor'],
+  [/^emisor$/i, 'Terminal de menor voltaje del transistor'],
+  [/^anodo$/i, 'Terminal positivo del diodo/LED'],
+  [/^catodo$/i, 'Terminal negativo del diodo/LED'],
+  [/^wiper$/i, 'Cursor variable del potenciómetro']
+];
+function inferPinMeaning(name){
+  if(!name) return '';
+  for(const [re,txt] of PIN_MEANINGS){ if(re.test(name)) return txt; }
+  return '';
+}
+
+function buildComponentInfoHtml(c){
+  const def = COMPONENTS[c.type];
+  const desc = COMPONENT_INFO[c.type] || (CATEGORY_INFO[def.cat] || 'Componente electrónico.');
+  let html = `<p style="font-size:13px;line-height:1.5;color:var(--text);margin:0 0 12px;">${desc}</p>`;
+  html += `<div class="cat-title" style="padding-top:0;">Categoría</div><p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">${def.cat}</p>`;
+  if(c.terminals && c.terminals.length){
+    html += `<div class="cat-title" style="padding-top:0;">Pines (${c.terminals.length})</div><div class="slist">`;
+    c.terminals.forEach((t,i)=>{
+      const nm = t.name || ('Pin '+i);
+      const meaning = inferPinMeaning(t.name) || 'Terminal de conexión';
+      html += `<div class="sitem" style="cursor:default;"><div class="name"><b>${nm}</b> — <span style="color:var(--text-dim);">${meaning}</span></div></div>`;
+    });
+    html += `</div>`;
+  }
+  return html;
+}
+function showComponentInfo(c){
+  const def = COMPONENTS[c.type];
+  openOverlay('ℹ️ '+def.label, buildComponentInfoHtml(c));
+}
+
+// añadir el botón "Info" al panel de acciones rápidas
+const quickActionsEl = document.getElementById('quickActions');
+if(quickActionsEl && !document.getElementById('btnInfo')){
+  const infoBtn = document.createElement('button');
+  infoBtn.className = 'tbtn';
+  infoBtn.id = 'btnInfo';
+  infoBtn.textContent = 'ℹ️ Info';
+  quickActionsEl.insertBefore(infoBtn, quickActionsEl.firstChild);
+  infoBtn.addEventListener('click', ()=>{
+    if(selectedComp) showComponentInfo(selectedComp);
+  });
+}
+
+})();
+</script>
+<script>
+// ============================================================
+// correccion-pines-faltantes.js — Añade pines reales que faltaban
+// en varios componentes (VCC/GND en lógica, NC en relé, etc.)
+// Pegar al final, después de todos los demás <script>.
+// ============================================================
+(function(){
+
+// ------------------------------------------------------------
+// 1) RELÉ — le faltaba el contacto NC (la mayoría de relés reales
+// son SPDT: común, normalmente abierto y normalmente cerrado)
+// ------------------------------------------------------------
+{
+  const def = COMPONENTS.relay;
+  def.terminals = [T(-40,-24,'bobA'),T(-40,24,'bobB'),T(40,-24,'com'),T(40,0,'no'),T(40,24,'nc')];
+  def.edges = function(c){
+    const pulled = Math.abs(c.state?.Icoil||0) >= c.props.Ipull;
+    return [
+      {n:[0,1], type:'R', value:c.props.Rcoil, tag:'coil'},
+      {n:[2,3], type: pulled? 'R':'OPEN', value:0.05},
+      {n:[2,4], type: pulled? 'OPEN':'R', value:0.05}
+    ];
+  };
+  def.draw = function(ctx,c){
+    leadLines(ctx,[[-40,-24],[-14,-24]]); leadLines(ctx,[[-40,24],[-14,24]]);
+    leadLines(ctx,[[40,-24],[14,-24]]); leadLines(ctx,[[40,0],[14,0]]); leadLines(ctx,[[40,24],[14,24]]);
+    const pulled = Math.abs(c.state?.Icoil||0) >= c.props.Ipull;
+    ctx.strokeStyle= pulled? COL_WIRE_ON:COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-14,-28,28,56);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('RELÉ',0,-2); ctx.font='6.5px sans-serif';
+    ctx.fillText(pulled?'com→NO':'com→NC',0,10);
+  };
+}
+
+// ------------------------------------------------------------
+// 2) COMPUERTAS LÓGICAS, LATCH SR, COMPARADOR Y SCHMITT TRIGGER
+// — todos son circuitos integrados reales: NO pueden funcionar
+// sin sus pines de alimentación (VCC/GND). Antes "funcionaban"
+// usando una propiedad interna aunque no tuvieran corriente real.
+// ------------------------------------------------------------
+const GATE_FN = {
+  gate_and:(a,b)=>a&&b, gate_or:(a,b)=>a||b, gate_nand:(a,b)=>!(a&&b),
+  gate_nor:(a,b)=>!(a||b), gate_xor:(a,b)=>a!==b, gate_xnor:(a,b)=>a===b
+};
+Object.keys(GATE_FN).forEach(type=>{
+  const def = COMPONENTS[type]; if(!def) return;
+  const fn = GATE_FN[type];
+  const vI = def.terminals.length, gI = vI+1; // out=2 sigue igual, se agregan VCC/GND al final
+  def.terminals.push(T(0,-30,'VCC'), T(0,30,'GND'));
+  def.edges = function(c){
+    const vcc = (c.state?.['Vt'+vI]||0) - (c.state?.['Vt'+gI]||0);
+    if(vcc < 3.0) return [{n:[2,gI], type:'OPEN', value:1e9}];
+    const a=(c.state?.Vin0||0) > vcc/2, b=(c.state?.Vin1||0) > vcc/2;
+    const out = fn(a,b);
+    return [{n:[2,gI], type:'GATEOUT', value: out? vcc:0, tag:'gate', Rint:10}];
+  };
+  const origDraw = def.draw;
+  def.draw = function(ctx,c,sim){
+    origDraw(ctx,c,sim);
+    leadLines(ctx,[[0,-30],[0,-18]]); leadLines(ctx,[[0,30],[0,18]]);
+    const powered = ((c.state?.['Vt'+vI]||0)-(c.state?.['Vt'+gI]||0)) >= 3.0;
+    if(!powered){ ctx.fillStyle='#ff5c5c'; ctx.font='6.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('sin VCC',0,26); }
+  };
+});
+
+['gate_not','gate_buffer'].forEach(type=>{
+  const def = COMPONENTS[type]; if(!def) return;
+  const isNot = type==='gate_not';
+  const vI = def.terminals.length, gI = vI+1; // in=0, out=1
+  def.terminals.push(T(0,-30,'VCC'), T(0,30,'GND'));
+  def.edges = function(c){
+    const vcc = (c.state?.['Vt'+vI]||0) - (c.state?.['Vt'+gI]||0);
+    if(vcc < 3.0) return [{n:[1,gI], type:'OPEN', value:1e9}];
+    const a=(c.state?.Vin0||0) > vcc/2;
+    const out = isNot? !a : a;
+    return [{n:[1,gI], type:'GATEOUT', value: out? vcc:0, tag:'gate', Rint:10}];
+  };
+  const origDraw = def.draw;
+  def.draw = function(ctx,c,sim){
+    origDraw(ctx,c,sim);
+    leadLines(ctx,[[0,-30],[0,-18]]); leadLines(ctx,[[0,30],[0,18]]);
+  };
+});
+
+{ // SR Latch
+  const def = COMPONENTS.sr_latch;
+  const vI = def.terminals.length, gI = vI+1; // S=0,R=1,Q=2,Q̄=3
+  def.terminals.push(T(0,-34,'VCC'), T(0,34,'GND'));
+  def.step = function(c, dt, sim){
+    const vcc = (c.state?.['Vt'+vI]||0) - (c.state?.['Vt'+gI]||0);
+    if(vcc < 3.0) return; // sin alimentación: conserva el último estado, no responde
+    const S = (c.state?.Vin0||0) > vcc/2;
+    const R = (c.state?.Vin1||0) > vcc/2;
+    let q = c.state.Q ?? false;
+    if(S && !R) q = true;
+    else if(R && !S) q = false;
+    else if(S && R) q = false;
+    c.state.Q = q;
+  };
+  def.edges = function(c){
+    const vcc = (c.state?.['Vt'+vI]||0) - (c.state?.['Vt'+gI]||0);
+    if(vcc < 3.0) return [{n:[2,gI],type:'OPEN',value:1e9},{n:[3,gI],type:'OPEN',value:1e9}];
+    const q = c.state?.Q ?? false;
+    return [
+      {n:[2,gI], type:'GATEOUT', value: q? vcc:0, tag:'gate', Rint:10},
+      {n:[3,gI], type:'GATEOUT', value: q? 0:vcc, tag:'gate', Rint:10}
+    ];
+  };
+  const origDraw = def.draw;
+  def.draw = function(ctx,c,sim){
+    origDraw(ctx,c,sim);
+    leadLines(ctx,[[0,-34],[0,-22]]); leadLines(ctx,[[0,34],[0,22]]);
+  };
+}
+
+{ // Comparador LM393
+  const def = COMPONENTS.comparator;
+  const vI = def.terminals.length, gI = vI+1; // in+=0,in-=1,out=2
+  def.terminals.push(T(0,-30,'VCC'), T(0,30,'GND'));
+  def.edges = function(c){
+    const vcc = (c.state?.['Vt'+vI]||0) - (c.state?.['Vt'+gI]||0);
+    if(vcc < 3.0) return [{n:[2,gI], type:'OPEN', value:1e9}];
+    const highSide = (c.state?.Vt0||0) > (c.state?.Vt1||0);
+    return [{n:[2,gI], type: highSide? 'OPEN':'R', value: highSide? 1e9 : 15}];
+  };
+  const origDraw = def.draw;
+  def.draw = function(ctx,c,sim){
+    origDraw(ctx,c,sim);
+    leadLines(ctx,[[0,-30],[0,-20]]); leadLines(ctx,[[0,30],[0,20]]);
+  };
+}
+
+{ // Disparador Schmitt
+  const def = COMPONENTS.schmitt_trigger;
+  const vI = def.terminals.length, gI = vI+1; // in=0,out=1
+  def.terminals.push(T(0,-30,'VCC'), T(0,30,'GND'));
+  def.edges = function(c){
+    const vcc = (c.state?.['Vt'+vI]||0) - (c.state?.['Vt'+gI]||0);
+    if(vcc < 3.0) return [{n:[1,gI], type:'OPEN', value:1e9}];
+    const hi = c.state?.hi ?? false;
+    return [{n:[1,gI], type:'GATEOUT', value: !hi? vcc:0, tag:'gate', Rint:10}];
+  };
+  def.postSolve = function(c){
+    const vcc = (c.state?.['Vt'+vI]||0) - (c.state?.['Vt'+gI]||0);
+    if(vcc < 3.0) return;
+    const Vin = c.state?.Vt0||0;
+    let hi = c.state?.hi ?? false;
+    if(!hi && Vin > c.props.Vhigh) hi = true;
+    else if(hi && Vin < c.props.Vlow) hi = false;
+    c.state.hi = hi;
+  };
+  const origDraw = def.draw;
+  def.draw = function(ctx,c,sim){
+    origDraw(ctx,c,sim);
+    leadLines(ctx,[[0,-30],[0,-18]]); leadLines(ctx,[[0,30],[0,18]]);
+  };
+}
+
+// ------------------------------------------------------------
+// 3) JOYSTICK — le faltaba el pulsador (SW) que traen casi todos
+// los módulos de joystick reales al presionar la palanca.
+// ------------------------------------------------------------
+{
+  const def = COMPONENTS.joystick;
+  const swIdx = def.terminals.length; // índice del pin GND ya existente = 0
+  def.terminals.push(T(0,34,'SW'));
+  def.props.pressed = false;
+  def.interactive = true;
+  def.momentary = true;
+  def.onTap = function(c){ c.props.pressed = !c.props.pressed; };
+  const origEdges = def.edges;
+  def.edges = function(c){
+    const base = origEdges(c);
+    base.push({n:[swIdx,0], type: c.props.pressed? 'R':'OPEN', value:0.03});
+    return base;
+  };
+  const origDraw = def.draw;
+  def.draw = function(ctx,c){
+    origDraw(ctx,c);
+    leadLines(ctx,[[0,34],[0,18]]);
+    ctx.fillStyle = c.props.pressed? COL_WIRE_ON : '#556274';
+    ctx.beginPath(); ctx.arc(0,18,2.4,0,Math.PI*2); ctx.fill();
+  };
+}
+
+// ------------------------------------------------------------
+// 4) MÓDULO DC-DC BUCK genérico — tenía GND compartido entre
+// entrada y salida (3 pines); los módulos reales normalmente
+// aíslan entrada/salida con 4 pines, igual que XL4015/LM2596.
+// ------------------------------------------------------------
+COMPONENTS.dcdc = {
+  label:'Módulo DC-DC Buck', cat:'Módulos', icon:'⇲5V', props:{Vset:5.0, eta:0.92},
+  terminals:[T(-40,-16,'VIN+'), T(-40,16,'VIN-'), T(40,-16,'VOUT+'), T(40,16,'VOUT-')],
+  edges(c){
+    const vin = (c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vin <= 1) return [{n:[2,3], type:'OPEN', value:1e9}];
+    let vout = Math.min(c.props.Vset, Math.max(0, vin*c.props.eta));
+    c.state.Vin = vin; c.state.Vout = vout;
+    return [{n:[2,3], type:'V', value:vout, Rint:0.5}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-40,-16],[-16,-16]]); leadLines(ctx,[[-40,16],[-16,16]]);
+    leadLines(ctx,[[16,-16],[40,-16]]); leadLines(ctx,[[16,16],[40,16]]);
+    ctx.strokeStyle='#7de37d'; ctx.lineWidth=2; ctx.strokeRect(-16,-20,32,40);
+    ctx.fillStyle='rgba(125,227,125,.15)'; ctx.fillRect(-16,-20,32,40);
+    ctx.fillStyle='#aab6c4'; ctx.font='8px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('BUCK',0,-4);
+    ctx.font='7px sans-serif'; ctx.fillText((c.state?.Vout||0).toFixed(2)+'V',0,8);
+  }
+};
+
+// ------------------------------------------------------------
+// 5) ARDUINO — le faltaban AREF, RESET y 3V3 (pines reales de la
+// placa que muchos proyectos necesitan conectar).
+// ------------------------------------------------------------
+{
+  const def = COMPONENTS.arduino;
+  const arefIdx = def.terminals.length;
+  const resetIdx = arefIdx+1;
+  const v33Idx = arefIdx+2;
+  def.terminals.push(T(-70,105,'AREF'), T(-70,-105,'RESET'), T(70,-100,'3V3'));
+  ARD_PIN_INDEX.AREF = arefIdx;
+  ARD_PIN_INDEX.RESET = resetIdx;
+  ARD_PIN_INDEX['3V3'] = v33Idx;
+  const origEdges = def.edges;
+  def.edges = function(c){
+    const e = origEdges(c);
+    e.push({n:[ARD_PIN_INDEX['3V3'], ARD_PIN_INDEX.GND], type:'V', value:3.3, Rint:15});
+    return e;
+  };
+}
+
+// ------------------------------------------------------------
+// 6) LECTOR RFID RC522 — solo tenía 4 pines; el módulo SPI real
+// tiene 8: VCC, RST, GND, IRQ, MISO, MOSI, SCK, SDA(SS).
+// ------------------------------------------------------------
+COMPONENTS.rfid_rc522 = {
+  label:'Lector RFID (RC522)', cat:'Módulos', icon:'📶ID', props:{cardPresent:false},
+  terminals:[
+    T(-30,-32,'VCC'), T(-30,-16,'RST'), T(-30,0,'GND'), T(-30,16,'IRQ'),
+    T(30,-32,'MISO'), T(30,-16,'MOSI'), T(30,0,'SCK'), T(30,16,'SDA')
+  ],
+  interactive:true,
+  onTap(c){ c.props.cardPresent = !c.props.cardPresent; },
+  edges(c){ return [{n:[4,2], type:'OPEN', value:1e9}]; },
+  draw(ctx,c){
+    c.terminals.forEach(t=> leadLines(ctx,[[t.x,t.y],[t.x<0? t.x+14:t.x-14, t.y]]));
+    const powered = ((c.state.Vt0||0)-(c.state.Vt2||0)) >= 3.0;
+    ctx.strokeStyle= (powered && c.props.cardPresent)? COL_WIRE_ON:COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-14,-36,28,72);
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center'; ctx.fillText('RC522',0,-2);
+    ctx.fillText(!powered? 'sin VCC' : (c.props.cardPresent?'tarjeta (toca)':'sin tarjeta'),0,10);
+  }
+};
+
+// ------------------------------------------------------------
+// 7) DRIVER A4988 — solo tenía 2 pines de salida (OUT_A, OUT_B),
+// pero un motor paso a paso real necesita 2 bobinas completas
+// (4 hilos: 1A,1B,2A,2B). Con solo 2 pines nunca podía girar bien.
+// ------------------------------------------------------------
+COMPONENTS.a4988_driver = {
+  label:'Driver de Motor Paso a Paso (A4988)', cat:'Módulos', icon:'⇉⚙', props:{Vmot:12},
+  terminals:[
+    T(-40,-32,'VDD'), T(-40,-16,'GND'), T(-40,0,'STEP'), T(-40,16,'DIR'), T(-40,32,'ENABLE'),
+    T(40,-32,'VMOT'), T(40,-16,'1A'), T(40,0,'1B'), T(40,16,'2A'), T(40,32,'2B')
+  ],
+  step(c, dt){
+    const vdd = (c.state.Vt0||0)-(c.state.Vt1||0);
+    const enV = c.state.Vt4||0;
+    const enabled = vdd>=2.7 && enV < 2.0;
+    const stepV = c.state.Vt2||0;
+    const dirV = c.state.Vt3||0;
+    const stepHigh = stepV > vdd/2;
+    if(enabled && stepHigh && !c.state._lastStep) c.state.phase = ((c.state.phase||0) + (dirV>vdd/2? 1:-1) + 4) % 4;
+    c.state._lastStep = stepHigh;
+    c.state.enabled = enabled;
+  },
+  edges(c){
+    const vmot = c.state.Vt5||0;
+    if(!c.state.enabled) return [
+      {n:[6,1],type:'OPEN',value:1e9},{n:[7,1],type:'OPEN',value:1e9},
+      {n:[8,1],type:'OPEN',value:1e9},{n:[9,1],type:'OPEN',value:1e9}
+    ];
+    const seq = [[1,-1],[1,1],[-1,1],[-1,-1]];
+    const ph = c.state.phase||0;
+    const [a,b] = seq[ph];
+    const [cc,dd] = seq[(ph+1)%4];
+    return [
+      {n:[6,1], type:'V', value:a*vmot*0.5, Rint:2},
+      {n:[7,1], type:'V', value:b*vmot*0.5, Rint:2},
+      {n:[8,1], type:'V', value:cc*vmot*0.5, Rint:2},
+      {n:[9,1], type:'V', value:dd*vmot*0.5, Rint:2}
+    ];
+  },
+  draw(ctx,c){
+    c.terminals.forEach(t=> leadLines(ctx,[[t.x,t.y],[t.x<0? t.x+16:t.x-16, t.y]]));
+    ctx.strokeStyle= c.state?.enabled? COL_WIRE_ON:COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-24,-38,48,76);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('A4988',0,-2);
+    ctx.font='6.5px sans-serif'; ctx.fillText(c.state?.enabled?'fase '+(c.state.phase||0):'deshabilitado',0,10);
+  }
+};
+
+})();
+</script>
+<script>
+// ============================================================
+// correccion-pines-lcd-y-mas.js — Completa los pines reales de:
+// LCD 16x2, sensores de nivel de agua/lluvia/humedad de suelo,
+// sensor de gas, módulo Bluetooth HC-05 y puente H L298N.
+// Pegar al final, después de todos los demás <script>.
+// ============================================================
+(function(){
+
+// ------------------------------------------------------------
+// 1) LCD 16x2 (HD44780) — antes solo tenía 2 pines genéricos.
+// Ahora tiene los 16 pines reales: VSS,VDD,V0,RS,RW,E,D0-D7,A,K
+// ------------------------------------------------------------
+COMPONENTS.lcd_1602 = {
+  label:'Pantalla LCD 16x2 (HD44780)', cat:'Salida', icon:'▭▭', props:{R:220},
+  terminals:[
+    T(-40,-56,'VSS'), T(-40,-40,'VDD'), T(-40,-24,'V0'),
+    T(-40,-8,'RS'), T(-40,8,'RW'), T(-40,24,'E'),
+    T(-40,40,'D0'), T(-40,56,'D1'),
+    T(40,-56,'D2'), T(40,-40,'D3'), T(40,-24,'D4'), T(40,-8,'D5'),
+    T(40,8,'D6'), T(40,24,'D7'), T(40,40,'A'), T(40,56,'K')
+  ],
+  edges(c){
+    return [
+      {n:[1,0], type:'R', value:1e7, tag:'logic'},        // VDD-VSS: solo para poder medir el estado de alimentación
+      {n:[14,15], type:'R', value:c.props.R, tag:'main'}   // A-K: circuito de retroiluminación (con su resistencia)
+    ];
+  },
+  draw(ctx,c,sim){
+    c.terminals.forEach(t=> leadLines(ctx,[[t.x,t.y],[t.x<0? t.x+20:t.x-20, t.y]]));
+    const powered = ((c.state?.Vt1||0)-(c.state?.Vt0||0)) >= 3.0;
+    const on = Math.abs(c.state?.I||0) > 0.003; // retroiluminación encendida
+
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-20,-60,40,120);
+    const gx=-16, gy=-30, gw=32, gh=44;
+    ctx.fillStyle = on ? '#2a5a22' : '#132a1a';
+    ctx.fillRect(gx,gy,gw,gh);
+
+    if(on){
+      for(let col=0; col<8; col++){
+        const cx = gx+col*(gw/8)+(gw/16);
+        ctx.fillStyle='rgba(200,255,180,.35)';
+        for(let px=-1;px<=1;px++) for(let py=-2;py<=2;py++){
+          ctx.fillRect(cx+px*0.8-0.3, gy+18+py*1.1-0.3, 0.6,0.6);
+        }
+      }
+      if((sim.simTime%1)<0.5){ ctx.fillStyle='rgba(210,255,190,.85)'; ctx.fillRect(gx+1, gy+gh-6, gw/8-2, 3); }
+    }
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('LCD 16x2', 0, 24);
+    ctx.font='6px sans-serif';
+    ctx.fillText(!powered? 'sin VDD lógico' : (on? 'backlight ON':'backlight off'), 0, 34);
+  }
+};
+if(typeof propFieldsFor === 'function'){
+  const _prevPF1 = propFieldsFor;
+  propFieldsFor = function(type){
+    if(type==='lcd_1602') return [{key:'R', label:'Resistencia backlight (Ω)'}];
+    return _prevPF1(type);
+  };
+}
+
+// ------------------------------------------------------------
+// 2) SENSOR DE NIVEL DE AGUA — antes era solo 2 pines resistivos.
+// El módulo real trae VCC, GND y AOUT (salida analógica).
+// ------------------------------------------------------------
+COMPONENTS.water_level_sensor = {
+  label:'Sensor de Nivel de Agua', cat:'Sensores', icon:'≈R', props:{level:0.4, Vcc:5},
+  terminals:[T(-30,0,'GND'),T(30,0,'AOUT'),T(0,-20,'VCC')],
+  edges(c){
+    const vccV = (c.state.Vt2||0)-(c.state.Vt0||0);
+    if(vccV < 2.5) return [{n:[0,1], type:'OPEN', value:1e9}];
+    return [{n:[0,1], type:'V', value: c.props.level*Math.min(vccV,c.props.Vcc), Rint:150}];
+  },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-30,0],[-20,0]]); leadLines(ctx,[[30,0],[20,0]]); leadLines(ctx,[[0,-20],[0,-12]]);
+    const powered = ((c.state.Vt2||0)-(c.state.Vt0||0)) >= 2.5;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-20,-12,40,24);
+    const waterY = 10 - 24*c.props.level;
+    ctx.save(); ctx.beginPath(); ctx.rect(-20,-12,40,24); ctx.clip();
+    ctx.fillStyle='rgba(77,166,255,.45)';
+    ctx.beginPath(); ctx.moveTo(-20,12);
+    for(let x=-20;x<=20;x+=4){ ctx.lineTo(x, waterY + Math.sin(sim.simTime*3+x*0.4)*1.4); }
+    ctx.lineTo(20,12); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(powered? 'nivel '+Math.round(c.props.level*100)+'%' : 'sin VCC', 0, 22);
+  }
+};
+
+// ------------------------------------------------------------
+// 3) SENSOR DE LLUVIA — antes 2 pines resistivos. El módulo
+// real (placa comparadora) trae VCC, GND y AOUT.
+// ------------------------------------------------------------
+COMPONENTS.rain_sensor = {
+  label:'Sensor de Lluvia (módulo)', cat:'Sensores', icon:'☔R', props:{rain:0.2, Vcc:5},
+  terminals:[T(-30,0,'GND'),T(30,0,'AOUT'),T(0,-20,'VCC')],
+  edges(c){
+    const vccV = (c.state.Vt2||0)-(c.state.Vt0||0);
+    if(vccV < 2.5) return [{n:[0,1], type:'OPEN', value:1e9}];
+    return [{n:[0,1], type:'V', value: (1-c.props.rain)*Math.min(vccV,c.props.Vcc), Rint:150}];
+  },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-30,0],[-22,0]]); leadLines(ctx,[[30,0],[22,0]]); leadLines(ctx,[[0,-20],[0,-11]]);
+    const powered = ((c.state.Vt2||0)-(c.state.Vt0||0)) >= 2.5;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-22,-11,44,22);
+    ctx.strokeStyle='#3a4756'; ctx.lineWidth=1;
+    for(let i=-3;i<=3;i++){ ctx.beginPath(); ctx.moveTo(i*6,-11); ctx.lineTo(i*6,11); ctx.stroke(); }
+    if(powered){
+      const n = Math.round(2+c.props.rain*8);
+      for(let i=0;i<n;i++){
+        const ph = (sim.simTime*1.4 + i*0.37) % 1;
+        const dx = -18 + ((i*53)%40);
+        const dy = -20 + ph*30;
+        if(dy < 11){ ctx.strokeStyle='rgba(77,166,255,.8)'; ctx.lineWidth=1.4;
+          ctx.beginPath(); ctx.moveTo(dx,dy); ctx.lineTo(dx-1.5,dy+5); ctx.stroke(); }
+      }
+    }
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(powered? 'lluvia '+Math.round(c.props.rain*100)+'%' : 'sin VCC', 0, 22);
+  }
+};
+
+// ------------------------------------------------------------
+// 4) SENSOR DE HUMEDAD DE SUELO — antes 2 pines resistivos.
+// El módulo capacitivo real trae VCC, GND y AOUT.
+// ------------------------------------------------------------
+COMPONENTS.soil_moisture_sensor = {
+  label:'Sensor de Humedad de Suelo (módulo)', cat:'Sensores', icon:'🌱R', props:{moisture:0.3, Vcc:5},
+  terminals:[T(-30,0,'GND'),T(30,0,'AOUT'),T(0,-20,'VCC')],
+  edges(c){
+    const vccV = (c.state.Vt2||0)-(c.state.Vt0||0);
+    if(vccV < 3.0) return [{n:[0,1], type:'OPEN', value:1e9}];
+    return [{n:[0,1], type:'V', value: (1-c.props.moisture)*Math.min(vccV,c.props.Vcc), Rint:150}];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,0],[-22,0]]); leadLines(ctx,[[30,0],[22,0]]); leadLines(ctx,[[0,-20],[0,-10]]);
+    const powered = ((c.state.Vt2||0)-(c.state.Vt0||0)) >= 3.0;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.moveTo(-22,-10); ctx.lineTo(-22,10); ctx.moveTo(22,-10); ctx.lineTo(22,10); ctx.stroke();
+    ctx.fillStyle=`rgba(120,80,40,${0.15+c.props.moisture*0.5})`; ctx.fillRect(-22,-10,44,20);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(powered? 'humedad '+Math.round(c.props.moisture*100)+'%' : 'sin VCC', 0, 24);
+  }
+};
+
+// ------------------------------------------------------------
+// 5) SENSOR DE GAS (MQ) — antes 2 pines resistivos sin
+// alimentación. El módulo real (con comparador) trae VCC, GND,
+// DOUT (digital) y AOUT (analógico).
+// ------------------------------------------------------------
+COMPONENTS.gas_sensor = {
+  label:'Sensor de Gas (módulo MQ)', cat:'Sensores', icon:'☁R', props:{gas:0.2, threshold:0.4, Vcc:5},
+  terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,-16,'DOUT'),T(30,16,'AOUT')],
+  edges(c){
+    const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+    if(vccV < 3.0) return [{n:[2,1], type:'OPEN', value:1e9},{n:[3,1], type:'OPEN', value:1e9}];
+    const analogV = c.props.gas*Math.min(vccV,c.props.Vcc);
+    const digital = c.props.gas >= c.props.threshold;
+    return [
+      {n:[3,1], type:'V', value:analogV, Rint:150, tag:'aout'},
+      {n:[2,1], type:'V', value: digital? c.props.Vcc:0, Rint:10, tag:'dout'}
+    ];
+  },
+  draw(ctx,c){
+    leadLines(ctx,[[-30,-16],[-16,-16]]); leadLines(ctx,[[-30,16],[-16,16]]);
+    leadLines(ctx,[[30,-16],[16,-16]]); leadLines(ctx,[[30,16],[16,16]]);
+    const powered = ((c.state.Vt0||0)-(c.state.Vt1||0)) >= 3.0;
+    ctx.strokeStyle=COL_BODY; ctx.lineWidth=1.6; ctx.strokeRect(-16,-20,32,40);
+    if(powered){ ctx.fillStyle=`rgba(150,255,150,${0.1+c.props.gas*0.55})`; ctx.fillRect(-14,-18,28,36); }
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('MQ', 0, -2);
+    ctx.fillText(powered? 'gas '+Math.round(c.props.gas*100)+'%':'sin VCC', 0, 24);
+  }
+};
+
+// ------------------------------------------------------------
+// 6) MÓDULO BLUETOOTH HC-05 — le faltaban EN(KEY) y STATE,
+// pines reales del módulo (EN tiene pull-up interno: si no se
+// conecta, el módulo funciona normal, igual que en la vida real).
+// ------------------------------------------------------------
+COMPONENTS.bluetooth_module = {
+  label:'Módulo Bluetooth (HC-05)', cat:'Módulos', icon:'🔷', props:{paired:false},
+  terminals:[T(-30,-24,'VCC'),T(-30,24,'GND'),T(30,-24,'TX'),T(30,-8,'RX'),T(30,8,'STATE'),T(30,24,'EN')],
+  interactive:true,
+  onTap(c){ c.props.paired = !c.props.paired; },
+  edges(c){
+    const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+    const e = [
+      {n:[0,1], type:'R', value:1200},
+      {n:[5,0], type:'R', value:100000} // pull-up interno de EN hacia VCC
+    ];
+    const enV = c.state.Vt5||0;
+    const enabled = vccV >= 3.0 && enV > vccV/2;
+    e.push({n:[4,1], type: enabled && c.props.paired? 'V':'OPEN', value: enabled? vccV:0, Rint:1000});
+    return e;
+  },
+  draw(ctx,c,sim){
+    leadLines(ctx,[[-30,-24],[-14,-24]]); leadLines(ctx,[[-30,24],[-14,24]]);
+    leadLines(ctx,[[30,-24],[14,-24]]); leadLines(ctx,[[30,-8],[14,-8]]);
+    leadLines(ctx,[[30,8],[14,8]]); leadLines(ctx,[[30,24],[14,24]]);
+    const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+    const enabled = vccV>=3.0 && (c.state.Vt5||0) > vccV/2;
+    ctx.strokeStyle='#4da6ff'; ctx.lineWidth=1.6; ctx.strokeRect(-14,-28,28,56);
+    const period = c.props.paired? 1.0 : 0.25;
+    const on = enabled && (sim.simTime % period) < period*0.5;
+    ctx.beginPath(); ctx.arc(0,-2,4,0,Math.PI*2);
+    ctx.fillStyle = on? '#4da6ff' : '#1c2530'; ctx.fill();
+    ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('HC-05',0,14);
+    ctx.fillText(!enabled? 'EN bajo':(c.props.paired?'vinculado':'buscando'),0,26);
+  }
+};
+
+// ------------------------------------------------------------
+// 7) PUENTE H L298N — solo controlaba UN motor (canal A). El
+// chip real trae 2 canales completos (A y B). Se agrega IN3,
+// IN4, ENB, OUT3, OUT4.
+// ------------------------------------------------------------
+COMPONENTS.l298n_hbridge = {
+  label:'Puente H (L298N, doble canal)', cat:'Módulos', icon:'⇄⚙', props:{Vdrop:1.5},
+  terminals:[
+    T(-40,-32,'VS'), T(-40,-16,'GND'), T(-40,0,'IN1'), T(-40,16,'IN2'), T(0,-40,'ENA'),
+    T(-40,32,'IN3'), T(0,40,'ENB'), T(40,-24,'OUT1'), T(40,-8,'OUT2'),
+    T(40,8,'OUT3'), T(40,24,'OUT4'), T(0,-24,'IN4')
+  ],
+  edges(c){
+    const vs = (c.state.Vt0||0)-(c.state.Vt1||0);
+    const enA = (c.state.Vt4||0) > 2.0;
+    const enB = (c.state.Vt6||0) > 2.0;
+    const vout = Math.max(0, vs - c.props.Vdrop);
+    const e = [];
+    if(vs<1 || !enA){ e.push({n:[7,1],type:'OPEN',value:1e9},{n:[8,1],type:'OPEN',value:1e9}); }
+    else{
+      const in1=(c.state.Vt2||0)>vs/2, in2=(c.state.Vt3||0)>vs/2;
+      e.push({n:[7,1], type:'V', value:(in1&&!in2)?vout:0, Rint:1});
+      e.push({n:[8,1], type:'V', value:(in2&&!in1)?vout:0, Rint:1});
+    }
+    if(vs<1 || !enB){ e.push({n:[9,1],type:'OPEN',value:1e9},{n:[10,1],type:'OPEN',value:1e9}); }
+    else{
+      const in3=(c.state.Vt5||0)>vs/2, in4=(c.state.Vt11||0)>vs/2;
+      e.push({n:[9,1], type:'V', value:(in3&&!in4)?vout:0, Rint:1});
+      e.push({n:[10,1], type:'V', value:(in4&&!in3)?vout:0, Rint:1});
+    }
+    return e;
+  },
+  draw(ctx,c){
+    c.terminals.forEach(t=> leadLines(ctx,[[t.x,t.y],[t.x<0? t.x+16:(t.y===-40||t.y===40? t.x:t.x-16), t.y]]));
+    const vs=(c.state.Vt0||0)-(c.state.Vt1||0);
+    const enA=(c.state.Vt4||0)>2.0, enB=(c.state.Vt6||0)>2.0;
+    ctx.strokeStyle= (vs>=1 && (enA||enB))? COL_WIRE_ON:COL_BODY; ctx.lineWidth=2; ctx.strokeRect(-24,-36,48,72);
+    ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('L298N',0,-2);
+    ctx.font='6px sans-serif';
+    ctx.fillText('A:'+(enA?'ON':'off')+' B:'+(enB?'ON':'off'), 0, 10);
+    ctx.fillText(vs<1?'sin VS':'', 0, 20);
+  }
+};
+
+})();
+</script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
