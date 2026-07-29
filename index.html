@@ -14,150 +14,225 @@
 <meta name="apple-mobile-web-app-title" content="Tecnoyork">
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --bg:#0b0f14; --panel:#121821; --panel2:#161e2a; --grid:#1c2530;
-    --accent:#ffb02e; --accent2:#39d3a8; --wire-off:#3a4756; --wire-on:#ffb02e;
-    --text:#e7edf5; --text-dim:#8a97a8; --danger:#ff5c5c; --border:#232d3a;
+ :root{
+    --bg:#0a0d12; --bg2:#0d1117; --panel:rgba(20,26,36,.92); --panel2:rgba(28,36,48,.85);
+    --grid:#1a222e;
+    --accent:#ffab2e; --accent-glow:rgba(255,171,46,.35);
+    --accent2:#2ee6a6; --accent2-glow:rgba(46,230,166,.3);
+    --blue:#4da6ff; --blue-glow:rgba(77,166,255,.3);
+    --wire-off:#37424f; --wire-on:#ffab2e;
+    --text:#eef2f7; --text-dim:#8b97a6; --text-faint:#5c6774;
+    --danger:#ff5c6c; --danger-glow:rgba(255,92,108,.3);
+    --border:#242e3b; --border-soft:rgba(255,255,255,.06);
+    --radius:14px; --radius-sm:9px;
+    --font-ui:'Inter',system-ui,-apple-system,sans-serif;
+    --font-mono:'JetBrains Mono','Consolas',monospace;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none;}
-  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
-    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;overflow:hidden;}
+  html,body{margin:0;padding:0;height:100%;
+    background:
+      radial-gradient(ellipse 1200px 600px at 20% -10%, rgba(255,171,46,.06), transparent 60%),
+      radial-gradient(ellipse 900px 500px at 100% 0%, rgba(77,166,255,.05), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--font-ui);overflow:hidden;
+    -webkit-font-smoothing:antialiased;}
   #app{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 
-  /* TOP BAR */
-  #topbar{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);
-    border-bottom:1px solid var(--border);flex-shrink:0;z-index:20;
+ /* TOP BAR */
+  #topbarWrap{display:flex;align-items:stretch;gap:0;padding:0 14px 0 0;
+    background:linear-gradient(180deg, rgba(22,29,40,.97) 0%, rgba(16,21,29,.97) 100%);
+    backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--border-soft);
+    box-shadow:0 4px 24px rgba(0,0,0,.35), inset 0 -1px 0 rgba(255,171,46,.08);
+    flex-shrink:0;z-index:20;position:relative;}
+
+  .logo{flex-shrink:0;display:flex;align-items:center;gap:10px;
+    padding:9px 18px 9px 16px;position:relative;
+    background:linear-gradient(180deg, rgba(255,171,46,.05), transparent 70%);}
+  .logo::after{content:'';position:absolute;right:0;top:8px;bottom:8px;width:1px;
+    background:linear-gradient(180deg, transparent, var(--border-soft) 20%, var(--border-soft) 80%, transparent);}
+  .logo::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;
+    background:linear-gradient(180deg, var(--accent), var(--accent2));}
+  .logo-img{height:40px !important;max-height:40px !important;width:auto !important;max-width:200px;
+    object-fit:contain;display:block;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));}
+
+  #topbar{display:flex;align-items:center;gap:8px;padding:10px 14px;flex:1;min-width:0;
     overflow-x:auto; overflow-y:hidden; white-space:nowrap; scrollbar-width:none; -ms-overflow-style:none;}
   #topbar::-webkit-scrollbar{height:0; display:none;}
-  #topbar .logo{margin-right:4px;display:flex;align-items:center;flex-shrink:0;height:100%;}
-  #topbar .logo-img{height:48px !important;max-height:48px !important;width:230px !important;
-    object-fit:fill;display:block;}
-  .tbtn{background:var(--panel2);border:1px solid var(--border);color:var(--text);
-    border-radius:10px;padding:8px 10px;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;flex-shrink:0;}
-  .tbtn:active{transform:scale(.95);}
-  .tbtn.on{background:var(--accent2);color:#03291f;border-color:var(--accent2);font-weight:700;}
-  .tbtn.danger{color:var(--danger);}
+
+  #topbarFade{position:absolute;right:0;top:0;bottom:0;width:28px;pointer-events:none;
+    background:linear-gradient(90deg, transparent, rgba(11,15,20,.85));}
+  .tbtn{background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
+    background-color:var(--panel2);
+    border:1px solid var(--border);color:var(--text);
+    border-radius:11px;padding:9px 13px;font-size:12.5px;font-weight:600;
+    display:flex;align-items:center;gap:6px;cursor:pointer;flex-shrink:0;
+    transition:transform .12s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 2px 6px rgba(0,0,0,.15);}
+  .tbtn:hover{border-color:rgba(255,171,46,.35); box-shadow:0 2px 10px rgba(0,0,0,.25);}
+  .tbtn:active{transform:scale(.94);}
+  .tbtn.on{background:linear-gradient(180deg, #34e0a8, #22c690);color:#04241a;border-color:#22c690;
+    font-weight:700; box-shadow:0 0 0 1px rgba(46,230,166,.4), 0 4px 14px var(--accent2-glow);}
+  .tbtn.danger{color:#ff8290;border-color:rgba(255,92,108,.25);}
+  .tbtn.danger:hover{border-color:var(--danger); box-shadow:0 2px 12px var(--danger-glow);}
 
   /* MAIN LAYOUT */
   #main{flex:1;display:flex;min-height:0;position:relative;}
 
   /* PICKER & OVERLAY (shared base) */
-  .pickerBackdrop{position:fixed;inset:0;background:rgba(4,6,9,.6);backdrop-filter:blur(2px);
+  .pickerBackdrop{position:fixed;inset:0;background:rgba(4,6,10,.68);backdrop-filter:blur(4px);
     display:none;z-index:40;}
   .pickerBackdrop.open{display:block;}
-  .pickerModal{position:fixed;left:0;right:0;bottom:0;max-height:86vh;background:var(--panel);
-    border-radius:18px 18px 0 0;z-index:41;display:none;flex-direction:column;
-    box-shadow:0 -8px 30px rgba(0,0,0,.5);border-top:1px solid var(--border);}
+  .pickerModal{position:fixed;left:0;right:0;bottom:0;max-height:86vh;
+    background:linear-gradient(180deg, rgba(24,31,42,.99), rgba(15,19,27,.99));
+    backdrop-filter:blur(18px);
+    border-radius:22px 22px 0 0;z-index:41;display:none;flex-direction:column;
+    box-shadow:0 -12px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04) inset;
+    border-top:1px solid rgba(255,171,46,.18);}
   .pickerModal.open{display:flex;}
-  .pickerHandle{width:38px;height:4px;background:#2a3542;border-radius:3px;margin:8px auto 2px;}
-  .pickerHeader{display:flex;align-items:center;gap:8px;padding:6px 12px 10px;flex-shrink:0;
-    border-bottom:1px solid var(--border);}
-  .pickerHeader h3{margin:0;font-size:14px;flex:1;}
+  .pickerHandle{width:40px;height:4px;background:linear-gradient(90deg,#3a4756,#5c6b7d,#3a4756);
+    border-radius:3px;margin:10px auto 2px;}
+  .pickerHeader{display:flex;align-items:center;gap:8px;padding:8px 14px 12px;flex-shrink:0;
+    border-bottom:1px solid var(--border-soft);}
+  .pickerHeader h3{margin:0;font-size:14.5px;font-weight:700;flex:1;letter-spacing:.2px;}
   .pickerClose{background:var(--panel2);border:1px solid var(--border);color:var(--text);
-    width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;flex-shrink:0;}
-  .picker-search-row{display:flex;align-items:center;gap:8px;padding:6px 12px 10px;flex-shrink:0;
-    border-bottom:1px solid var(--border);}
-  .pickerSearch{flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--text);
-    border-radius:10px;padding:9px 12px;font-size:13px;}
-  .pickerBody{overflow-y:auto;padding:6px 12px 22px;-webkit-overflow-scrolling:touch;}
-  .cat-title{font-size:10.5px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;
-    font-weight:700;padding:14px 2px 8px;}
-  .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:9px;}
-  .comp-btn{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:5px;
-    background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:9px 5px 8px;
-    cursor:pointer;text-align:center;}
+    width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;flex-shrink:0;
+    transition:background .15s;}
+  .pickerClose:hover{background:rgba(255,92,108,.15); border-color:var(--danger);}
+  .picker-search-row{display:flex;align-items:center;gap:8px;padding:8px 14px 12px;flex-shrink:0;
+    border-bottom:1px solid var(--border-soft);}
+  .pickerSearch{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text);
+    border-radius:11px;padding:10px 13px;font-size:13px;outline:none;transition:border-color .15s, box-shadow .15s;}
+  .pickerSearch:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow);}
+  .pickerBody{overflow-y:auto;padding:8px 14px 26px;-webkit-overflow-scrolling:touch;}
+  .cat-title{font-size:10.5px;color:var(--accent);text-transform:uppercase;letter-spacing:1.4px;
+    font-weight:800;padding:16px 2px 9px;}
+  .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px;}
+  .comp-btn{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:6px;
+    background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) , var(--panel2);
+    border:1px solid var(--border);border-radius:13px;padding:10px 5px 9px;
+    cursor:pointer;text-align:center;transition:transform .12s ease, border-color .15s ease, box-shadow .15s ease;}
+  .comp-btn:hover{transform:translateY(-2px); border-color:rgba(255,171,46,.3); box-shadow:0 6px 16px rgba(0,0,0,.3);}
   .comp-btn:active{transform:scale(.96);}
-  .comp-btn.active{border-color:var(--accent);background:#2a2210;}
+  .comp-btn.active{border-color:var(--accent);background:linear-gradient(180deg, rgba(255,171,46,.14), rgba(255,171,46,.04));
+    box-shadow:0 0 0 1px var(--accent-glow);}
   .comp-btn .icon-wrap{width:60px;height:42px;display:flex;align-items:center;justify-content:center;
-    background:#0d1219;border-radius:8px;}
+    background:radial-gradient(circle at 30% 20%, #131a24, #0a0e14);border-radius:9px;
+    border:1px solid rgba(255,255,255,.04);}
   .comp-btn .icon-wrap img{width:56px;height:38px;}
-  .comp-btn .lbl{font-size:9.5px;color:var(--text-dim);line-height:1.2;}
+  .comp-btn .lbl{font-size:9.5px;color:var(--text-dim);line-height:1.25;font-weight:500;}
   #noResults{color:var(--text-dim);font-size:12px;text-align:center;padding:30px 10px;}
 
   /* OVERLAY BODY VARIANTS */
   .save-row{display:flex;align-items:center;gap:8px;padding:6px 0;}
-  .save-row input{flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--text);
-    border-radius:10px;padding:9px 12px;font-size:13px;}
-  .slist{display:flex;flex-direction:column;gap:6px;}
+  .save-row input{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text);
+    border-radius:11px;padding:10px 13px;font-size:13px;outline:none;}
+  .save-row input:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow);}
+  .slist{display:flex;flex-direction:column;gap:7px;}
   .sitem{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);
-    border-radius:10px;padding:10px 12px;cursor:pointer;}
+    border-radius:12px;padding:11px 13px;cursor:pointer;transition:border-color .15s, transform .12s;}
+  .sitem:hover{border-color:rgba(255,171,46,.25);}
   .sitem:active{transform:scale(.98);}
-  .sitem .name{flex:1;font-size:13px;}
-  .sitem .date{font-size:10px;color:var(--text-dim);}
-  .sitem .del{color:var(--danger);font-size:12px;background:none;border:none;cursor:pointer;width:28px;text-align:center;}
+  .sitem .name{flex:1;font-size:13px;font-weight:500;}
+  .sitem .date{font-size:10px;color:var(--text-faint);font-family:var(--font-mono);}
+  .sitem .del{color:var(--danger);font-size:13px;background:none;border:none;cursor:pointer;width:28px;text-align:center;}
   .empty{color:var(--text-dim);font-size:12px;text-align:center;padding:20px 10px;}
 
   /* ENVIRONMENT PANEL */
-  .env-group { margin-bottom: 18px; }
-  .env-label { display:flex; justify-content:space-between; font-size:12px; color:var(--text); margin-bottom:6px; }
-  .env-label b { color:var(--accent); }
-  .env-slider { width:100%; -webkit-appearance:none; height:6px; background:var(--panel2); border-radius:3px; outline:none; }
-  .env-slider::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; background:var(--accent); border-radius:50%; cursor:pointer; }
-  .env-slider::-moz-range-thumb { width:18px; height:18px; background:var(--accent); border-radius:50%; cursor:pointer; border:none; }
+  .env-group { margin-bottom: 20px; }
+  .env-label { display:flex; justify-content:space-between; font-size:12px; color:var(--text); margin-bottom:7px; font-weight:500;}
+  .env-label b { color:var(--accent); font-family:var(--font-mono); }
+  .env-slider { width:100%; -webkit-appearance:none; height:6px;
+    background:linear-gradient(90deg, var(--accent2), var(--accent)); border-radius:3px; outline:none; opacity:.85;}
+  .env-slider::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; background:#fff;
+    border:3px solid var(--accent); border-radius:50%; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.4);}
+  .env-slider::-moz-range-thumb { width:18px; height:18px; background:#fff; border:3px solid var(--accent);
+    border-radius:50%; cursor:pointer; }
 
   /* SCOPE PANEL */
   .scope-row { display:flex; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
   .scope-col { flex:1; min-width:140px; display:flex; flex-direction:column; gap:6px; }
-  .scope-col select { background:var(--panel2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px; font-size:12px; }
-  .scope-col label { font-size:11px; color:var(--text-dim); }
+  .scope-col select { background:var(--bg2); border:1px solid var(--border); color:var(--text);
+    border-radius:8px; padding:7px; font-size:12px; }
+  .scope-col label { font-size:11px; color:var(--text-dim); font-weight:600; text-transform:uppercase; letter-spacing:.5px;}
 
   /* Chip "colocando componente" flotante sobre el lienzo */
-  #placingChip{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:none;
-    align-items:center;gap:8px;background:rgba(255,176,46,.14);border:1px solid var(--accent);
-    color:var(--accent);border-radius:20px;padding:6px 8px 6px 14px;font-size:12px;font-weight:600;
+  #placingChip{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:none;
+    align-items:center;gap:8px;background:linear-gradient(180deg, rgba(255,171,46,.16), rgba(255,171,46,.08));
+    backdrop-filter:blur(8px);
+    border:1px solid var(--accent);
+    color:var(--accent);border-radius:22px;padding:7px 8px 7px 15px;font-size:12px;font-weight:700;
+    box-shadow:0 4px 16px var(--accent-glow);
     z-index:15;}
   #placingChip button{background:none;border:none;color:var(--accent);font-size:15px;cursor:pointer;
     width:22px;height:22px;line-height:1;}
 
   /* CANVAS */
-  #canvasWrap{flex:1;position:relative;overflow:hidden;background:var(--bg);}
+  #canvasWrap{flex:1;position:relative;overflow:hidden;
+    background:radial-gradient(ellipse 1000px 700px at 50% 40%, #0d131b, var(--bg));}
   #canvas{position:absolute;top:0;left:0;touch-action:none;}
 
   /* STATUS BAR */
   #statusbar{position:absolute;left:8px;bottom:8px;right:8px;display:flex;gap:6px;flex-wrap:wrap;
     pointer-events:none;}
-  .chip{background:rgba(18,24,33,.92);border:1px solid var(--border);border-radius:20px;
-    padding:5px 10px;font-size:11px;color:var(--text-dim);}
-  .chip b{color:var(--text);}
+  .chip{background:rgba(16,21,29,.9);backdrop-filter:blur(6px);border:1px solid var(--border-soft);
+    border-radius:20px;padding:6px 11px;font-size:11px;color:var(--text-dim);font-weight:500;
+    box-shadow:0 2px 8px rgba(0,0,0,.25);}
+  .chip b { color:var(--accent2); font-family:var(--font-mono); font-weight:600;}
 
   /* PROPERTIES PANEL */
-  #propPanel{position:absolute;right:8px;top:8px;width:190px;background:rgba(18,24,33,.97);
-    border:1px solid var(--border);border-radius:12px;padding:10px;display:none;}
-  #propPanel h4{margin:0 0 8px;font-size:12px;color:var(--accent);}
-  #propPanel label{font-size:10.5px;color:var(--text-dim);display:block;margin-top:6px;}
-  #propPanel input[type=number],#propPanel select{width:100%;background:var(--panel2);
-    border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px;font-size:12px;}
+  #propPanel{position:absolute;right:8px;top:8px;width:196px;
+    background:linear-gradient(180deg, rgba(22,29,40,.97), rgba(15,19,27,.97));
+    backdrop-filter:blur(10px);
+    border:1px solid rgba(255,171,46,.2);border-radius:14px;padding:12px;display:none;
+    box-shadow:0 8px 24px rgba(0,0,0,.35);}
+  #propPanel h4{margin:0 0 9px;font-size:12.5px;color:var(--accent);font-weight:800;
+    letter-spacing:.3px;padding-bottom:8px;border-bottom:1px solid var(--border-soft);}
+  #propPanel label{font-size:10.5px;color:var(--text-dim);display:block;margin-top:7px;font-weight:500;}
+  #propPanel input[type=number],#propPanel select{width:100%;background:var(--bg2);
+    border:1px solid var(--border);color:var(--text);border-radius:7px;padding:6px;font-size:12px;
+    font-family:var(--font-mono);}
   #propPanel input[type=range]{width:100%;}
-  #propPanel .row{display:flex;gap:6px;margin-top:8px;}
-  #propPanel .row .tbtn{flex:1;justify-content:center;font-size:11px;padding:6px;}
+  #propPanel .row{display:flex;gap:6px;margin-top:9px;}
+  #propPanel .row .tbtn{flex:1;justify-content:center;font-size:11px;padding:7px;}
 
   /* BOTTOM sheet for mobile: rotate/delete quick actions */
   #quickActions{position:absolute;left:50%;transform:translateX(-50%);bottom:8px;display:none;
     gap:8px;}
-  #quickActions .tbtn{padding:10px 14px;border-radius:24px;}
+  #quickActions .tbtn{padding:11px 15px;border-radius:26px;box-shadow:0 6px 18px rgba(0,0,0,.35);}
 
-  ::-webkit-scrollbar{width:5px;height:5px;}
-  ::-webkit-scrollbar-thumb{background:#2a3542;border-radius:3px;}
+  ::-webkit-scrollbar{width:6px;height:6px;}
+  ::-webkit-scrollbar-thumb{background:#2c3844;border-radius:3px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--accent);}
 
-  #hint{position:absolute;top:8px;left:8px;background:rgba(18,24,33,.9);border:1px solid var(--border);
-    border-radius:10px;padding:6px 10px;font-size:11px;color:var(--text-dim);max-width:60%;}
+  #hint{position:absolute;top:10px;left:10px;background:rgba(16,21,29,.92);backdrop-filter:blur(6px);
+    border:1px solid var(--border-soft);
+    border-radius:12px;padding:8px 12px;font-size:11px;color:var(--text-dim);max-width:60%;
+    box-shadow:0 4px 14px rgba(0,0,0,.3);}
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="topbar">
+  <div id="topbarWrap">
     <div class="logo"><img src="logo.png" alt="Tecnoyork Electrónica" class="logo-img"></div>
-    <button class="tbtn" id="btnAddComp">➕ Componentes</button>
-    <button class="tbtn" id="btnWire">🔌 Cable</button>
-    <button class="tbtn danger" id="btnCutWire">✂ Cortar</button>
-    <button class="tbtn" id="btnEnv">🌡️ Entorno</button>
-    <button class="tbtn" id="btnScope">📊 Osciloscopio</button>
-    <button class="tbtn" id="btnPower">▶ Encender</button>
-    <button class="tbtn" id="btnSave" title="Guardar circuito">💾</button>
-    <button class="tbtn" id="btnLoad" title="Cargar / Recientes">📂</button>
-    <button class="tbtn" id="btnCenter" title="Centrar vista">⌖</button>
-    <button class="tbtn danger" id="btnClear">🗑</button>
+    <div id="topbar">
+      <button class="tbtn" id="btnAddComp">➕ Componentes</button>
+      <button class="tbtn" id="btnWire">🔌 Cable</button>
+      <button class="tbtn danger" id="btnCutWire">✂ Cortar</button>
+      <button class="tbtn" id="btnEnv">🌡️ Entorno</button>
+      <button class="tbtn" id="btnScope">📊 Osciloscopio</button>
+      <button class="tbtn" id="btnPower">▶ Encender</button>
+      <button class="tbtn" id="btnSave" title="Guardar circuito">💾</button>
+      <button class="tbtn" id="btnLoad" title="Cargar / Recientes">📂</button>
+      <button class="tbtn" id="btnCenter" title="Centrar vista">⌖</button>
+      <button class="tbtn danger" id="btnClear">🗑</button>
+    </div>
+    <div id="topbarFade"></div>
   </div>
   <div id="main">
     <div id="canvasWrap">
@@ -5894,6 +5969,501 @@ COMPONENTS.l298n_hbridge = {
   }
 };
 
+})();
+</script>
+<script>
+// ============================================================
+// entorno-completo.js — Panel de Entorno + Mejoras 4,6,7,8,15,16,18
+// Pegar al final, justo antes de </body>.
+// Reemplaza cualquier versión anterior de este mismo script.
+// ============================================================
+
+// ------------------------------------------------------------
+// PARTE A — Panel de Entorno ampliado (todos los sensores)
+// ------------------------------------------------------------
+(function(){
+
+function setProp(type, prop, val){
+  comps.forEach(c=>{ if(c.type===type && c.props.hasOwnProperty(prop)) c.props[prop]=val; });
+}
+function anyCompOfTypes(types){ return comps.some(c=> types.includes(c.type)); }
+
+const ENV_SLIDERS = [
+  { id:'light', label:'☀️ Luz (LDR, Fotodiodo, Fototransistor)', min:0,max:1,step:0.01,def:0.5,
+    targets:[{type:'ldr',prop:'light'},{type:'photodiode',prop:'light'},{type:'phototransistor',prop:'light'}] },
+  { id:'temp', label:'🌡️ Temperatura (NTC, PTC, LM35, Termostato, Fusible Térmico)', min:0,max:1,step:0.01,def:0.5,
+    targets:[{type:'ntc',prop:'temp'},{type:'ptc',prop:'temp'},{type:'lm35',prop:'temp'},
+      {type:'thermostat',prop:'temp'},{type:'thermal_fuse',prop:'temp'}] },
+  { id:'thermo_diff', label:'🌡️〰️ Diferencial térmico (Termopar)', min:0,max:1,step:0.01,def:0.4,
+    targets:[{type:'thermocouple',prop:'tempDiff'}] },
+  { id:'field', label:'🧲 Campo Magnético (Sensor Hall digital)', min:0,max:1,step:0.01,def:0,
+    targets:[{type:'hall_sensor',prop:'field'}] },
+  { id:'field_lin', label:'🧲 Campo Magnético Lineal (Hall analógico)', min:-1,max:1,step:0.01,def:0,
+    targets:[{type:'hall_linear_sensor',prop:'field'}] },
+  { id:'sound', label:'🔊 Sonido / Ruido (Micrófono)', min:0,max:1,step:0.01,def:0.3,
+    targets:[{type:'mic',prop:'level'}] },
+  { id:'gas', label:'💨 Nivel de Gas (Sensor MQ)', min:0,max:1,step:0.01,def:0.2,
+    targets:[{type:'gas_sensor',prop:'gas'}] },
+  { id:'smoke', label:'🚨 Humo (Detector de Humo)', min:0,max:1,step:0.01,def:0.1,
+    targets:[{type:'smoke_detector',prop:'smoke'}] },
+  { id:'humidity', label:'💧 Humedad Ambiental (Higrómetro)', min:0,max:1,step:0.01,def:0.5,
+    targets:[{type:'hygrometer',prop:'humidity'}] },
+  { id:'soil', label:'🌱 Humedad del Suelo', min:0,max:1,step:0.01,def:0.3,
+    targets:[{type:'soil_moisture_sensor',prop:'moisture'}] },
+  { id:'rain', label:'🌧️ Lluvia', min:0,max:1,step:0.01,def:0.2,
+    targets:[{type:'rain_sensor',prop:'rain'}] },
+  { id:'water', label:'≈ Nivel de Agua', min:0,max:1,step:0.01,def:0.4,
+    targets:[{type:'water_level_sensor',prop:'level'}] },
+  { id:'vibration', label:'〰️ Vibración (Piezoeléctrico)', min:0,max:1,step:0.01,def:0.3,
+    targets:[{type:'piezo_sensor',prop:'vibration'}] },
+  { id:'distance', label:'📏 Distancia de Objeto (IR / Ultrasónico)', min:0,max:1,step:0.01,def:0.3,
+    targets:[{type:'distance_sensor',prop:'distance'},{type:'ultrasonic_sensor',prop:'distance'}] },
+  { id:'flex', label:'↝ Flexión (Sensor de Flex)', min:0,max:1,step:0.01,def:0.2,
+    targets:[{type:'flex_sensor',prop:'bend'}] },
+  { id:'uv', label:'🔆 Índice UV', min:0,max:1,step:0.01,def:0.2,
+    targets:[{type:'uv_sensor',prop:'uvIndex'}] },
+  { id:'weight', label:'⚖️ Peso (Celda de Carga)', min:0,max:1,step:0.01,def:0.2,
+    targets:[{type:'hx711_load_cell',prop:'weight'}] },
+  { id:'pressure', label:'📊 Presión Atmosférica', min:0,max:1,step:0.01,def:0.5,
+    targets:[{type:'bmp280_sensor',prop:'pressure'}] },
+  { id:'tilt', label:'⟳ Inclinación / Movimiento (MPU6050)', min:0,max:1,step:0.01,def:0,
+    targets:[{type:'mpu6050_sensor',prop:'tilt'}] },
+  { id:'joyX', label:'✛ Joystick — Eje X', min:0,max:1,step:0.01,def:0.5,
+    targets:[{type:'joystick',prop:'posX'}] },
+  { id:'joyY', label:'✛ Joystick — Eje Y', min:0,max:1,step:0.01,def:0.5,
+    targets:[{type:'joystick',prop:'posY'}] },
+];
+
+const ENV_TOGGLES = [
+  { id:'motion', label:'🚶 Movimiento (PIR)', type:'pir_sensor', prop:'motion' },
+  { id:'flame', label:'🔥 Llama detectada', type:'flame_sensor', prop:'flame' },
+  { id:'metal', label:'⌁ Metal cerca (Inductivo)', type:'inductive_proximity_sensor', prop:'detect' },
+  { id:'object', label:'⌁ Objeto cerca (Capacitivo)', type:'capacitive_proximity_sensor', prop:'detect' },
+  { id:'card', label:'📶 Tarjeta RFID presente', type:'rfid_rc522', prop:'cardPresent' },
+  { id:'gpsfix', label:'📡 Fix GPS adquirido', type:'gps_module', prop:'hasFix' },
+];
+
+function buildEnvPanelHtml(){
+  let html = `<p style="font-size:11px; color:var(--text-dim); margin:0 0 14px 0;">
+    Ajusta las condiciones físicas simuladas. Cada control afecta a TODOS los sensores
+    compatibles presentes en el lienzo, en tiempo real.</p>`;
+
+  html += `<div class="cat-title" style="padding-top:0;">Sensores Analógicos</div>`;
+  ENV_SLIDERS.forEach(s=>{
+    const present = anyCompOfTypes(s.targets.map(t=>t.type));
+    html += `<div class="env-group" style="${present?'':'opacity:.4;'}">
+      <div class="env-label">${s.label} <b id="val_${s.id}">${Math.round(s.def*100)}%</b></div>
+      <input type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.def}"
+        class="env-slider" data-envid="${s.id}">
+      ${present? '' : '<div style="font-size:10px;color:var(--text-faint);margin-top:3px;">Sin componentes de este tipo en el lienzo</div>'}
+    </div>`;
+  });
+
+  html += `<div class="cat-title">Sensores Digitales (interruptor)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">`;
+  ENV_TOGGLES.forEach(t=>{
+    const present = anyCompOfTypes([t.type]);
+    html += `<button class="tbtn" data-toggleid="${t.id}" style="${present?'':'opacity:.4;pointer-events:none;'}">${t.label}</button>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function refreshToggleStates(){
+  ENV_TOGGLES.forEach(t=>{
+    const btn = document.querySelector('[data-toggleid="'+t.id+'"]');
+    if(!btn) return;
+    const active = comps.some(c=> c.type===t.type && c.props[t.prop]===true);
+    btn.classList.toggle('on', active);
+  });
+}
+
+function openFullEnvironmentPanel(){
+  openOverlay('Herramientas de Entorno', buildEnvPanelHtml());
+  overlayBody.querySelectorAll('.env-slider').forEach(slider=>{
+    slider.addEventListener('input', ()=>{
+      const cfg = ENV_SLIDERS.find(s=>s.id===slider.dataset.envid);
+      const val = parseFloat(slider.value);
+      document.getElementById('val_'+cfg.id).textContent = Math.round(val*100)+'%';
+      cfg.targets.forEach(t=> setProp(t.type, t.prop, val));
+    });
+  });
+  overlayBody.querySelectorAll('[data-toggleid]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const cfg = ENV_TOGGLES.find(t=>t.id===btn.dataset.toggleid);
+      comps.forEach(c=>{ if(c.type===cfg.type) c.props[cfg.prop] = !c.props[cfg.prop]; });
+      refreshToggleStates();
+    });
+  });
+  refreshToggleStates();
+}
+
+const oldBtnEnv = document.getElementById('btnEnv');
+if(oldBtnEnv){
+  const newBtnEnv = oldBtnEnv.cloneNode(true);
+  oldBtnEnv.parentNode.replaceChild(newBtnEnv, oldBtnEnv);
+  newBtnEnv.addEventListener('click', openFullEnvironmentPanel);
+}
+
+})();
+
+
+// ------------------------------------------------------------
+// PARTE B — Mejora #4: Tooltip de voltaje/corriente en cables
+// ------------------------------------------------------------
+(function(){
+  const tooltip = document.createElement('div');
+  tooltip.id='wireTooltip';
+  tooltip.style.cssText = 'position:absolute;pointer-events:none;display:none;z-index:30;'+
+    'background:rgba(16,21,29,.95);border:1px solid var(--accent,#ffab2e);border-radius:8px;'+
+    'padding:6px 10px;font-size:11px;font-family:monospace;color:#ffe9c2;'+
+    'box-shadow:0 4px 14px rgba(0,0,0,.4);white-space:nowrap;line-height:1.5;';
+  wrap.appendChild(tooltip);
+
+  canvas.addEventListener('mousemove', function(ev){
+    if(dragging || panning || wireMode || cutMode || selectedType){ tooltip.style.display='none'; return; }
+    const r = canvas.getBoundingClientRect();
+    const sp = {x:ev.clientX-r.left, y:ev.clientY-r.top};
+    const p = toWorld(sp);
+    const w = hitWire(p.x, p.y);
+    if(!w){ tooltip.style.display='none'; return; }
+    const ca = comps.find(c=>c.id===w.a.compId), cb = comps.find(c=>c.id===w.b.compId);
+    if(!ca||!cb){ tooltip.style.display='none'; return; }
+    const I = Math.max(Math.abs(ca.state?.I||0), Math.abs(cb.state?.I||0));
+    const nodeV = ca.state?.['Vt'+w.a.term] ?? 0;
+    tooltip.innerHTML = `<b style="color:#39d3a8">⚡ ${fmtAmp(I)}</b><br><span style="color:#8a97a8">≈ ${fmtVolt(nodeV)}</span>`;
+    tooltip.style.left = (sp.x+14)+'px';
+    tooltip.style.top = (sp.y-8)+'px';
+    tooltip.style.display='block';
+  });
+  canvas.addEventListener('mouseleave', ()=> tooltip.style.display='none');
+})();
+
+
+// ------------------------------------------------------------
+// PARTE C — Mejora #15: LED Infrarrojo + Receptor IR
+// ------------------------------------------------------------
+(function(){
+  const IR_COMPONENTS = {
+    ir_led: { label:'LED Infrarrojo (emisor IR)', cat:'Semiconductores', icon:'📡IR',
+      props:{Vf:1.2, Imax:0.03, burned:false},
+      terminals:[T(-40,0,'anodo'),T(40,0,'catodo')],
+      edges(c){
+        if(c.props.burned) return [{n:[0,1], type:'OPEN', value:1e9}];
+        return [{n:[0,1], type:'DIODE', value:c.props.Vf, Ron:12}];
+      },
+      postSolve(c){ if(!c.props.burned && Math.abs(c.state?.I||0) > c.props.Imax) c.props.burned = true; },
+      draw(ctx,c,sim){
+        leadLines(ctx,[[-40,0],[-16,0]]); leadLines(ctx,[[16,0],[40,0]]);
+        const I = Math.abs(c.state?.I||0);
+        const emitting = !c.props.burned && I>0.001;
+        ctx.fillStyle = c.props.burned? '#1a1010' : (emitting? '#4a1010':'#2a1414');
+        ctx.beginPath(); ctx.moveTo(-14,-13); ctx.lineTo(14,0); ctx.lineTo(-14,13); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle=COL_BODY; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(14,-13); ctx.lineTo(14,13); ctx.stroke();
+        if(emitting){
+          for(let i=0;i<3;i++){
+            const ph = ((sim.simTime*3 + i/3)%1);
+            ctx.beginPath(); ctx.arc(16,0,6+ph*14,-0.5,0.5);
+            ctx.strokeStyle=`rgba(255,60,60,${(1-ph)*0.5})`; ctx.lineWidth=1.4; ctx.stroke();
+          }
+        }
+        ctx.fillStyle='#aab6c4'; ctx.font='7px sans-serif'; ctx.textAlign='center';
+        ctx.fillText(c.props.burned?'QUEMADO':'IR TX', 0, 24);
+      }
+    },
+    ir_receiver: { label:'Receptor Infrarrojo (TSOP)', cat:'Sensores', icon:'📡●', props:{Vcc:5},
+      terminals:[T(-30,-16,'VCC'),T(-30,16,'GND'),T(30,0,'OUT')],
+      edges(c){
+        const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+        if(vccV < 2.7) return [{n:[2,1], type:'OPEN', value:1e9}];
+        const receiving = comps.some(o=> o.type==='ir_led' && !o.props.burned && Math.abs(o.state?.I||0)>0.001);
+        return [{n:[2,1], type:'V', value: receiving? 0 : c.props.Vcc, Rint:10}]; // activo en bajo, como TSOP real
+      },
+      draw(ctx,c){
+        leadLines(ctx,[[-30,-16],[-14,-16]]); leadLines(ctx,[[-30,16],[-14,16]]); leadLines(ctx,[[30,0],[14,0]]);
+        const vccV = (c.state.Vt0||0)-(c.state.Vt1||0);
+        const powered = vccV>=2.7;
+        const receiving = powered && comps.some(o=> o.type==='ir_led' && !o.props.burned && Math.abs(o.state?.I||0)>0.001);
+        ctx.strokeStyle= receiving? COL_WIRE_ON:COL_BODY; ctx.lineWidth=1.6;
+        ctx.beginPath(); ctx.arc(0,0,15,Math.PI*0.1,Math.PI*1.9); ctx.stroke();
+        ctx.fillStyle= receiving? 'rgba(255,176,46,.25)':'rgba(120,130,145,.1)'; ctx.fill();
+        ctx.fillStyle='#aab6c4'; ctx.font='6.5px sans-serif'; ctx.textAlign='center';
+        ctx.fillText(!powered? 'sin VCC': (receiving?'recibiendo':'sin señal'),0,26);
+      }
+    }
+  };
+  Object.assign(COMPONENTS, IR_COMPONENTS);
+  if(typeof propFieldsFor === 'function'){
+    const _origPF = propFieldsFor;
+    propFieldsFor = function(type){
+      if(type==='ir_led') return [{key:'Vf',label:'Voltaje directo (V)',step:0.1},{key:'Imax',label:'Corriente máx. (A)',step:0.005}];
+      if(type==='ir_receiver') return [{key:'Vcc',label:'Vcc (V)',step:0.5}];
+      return _origPF(type);
+    };
+  }
+})();
+
+
+// ------------------------------------------------------------
+// PARTE D — Mejora #6 (Protoboard) y #7 (Velocidad) — botones
+// ------------------------------------------------------------
+(function(){
+  window.protoboardMode = false;
+  window.simSpeed = window.simSpeed || 1;
+
+  const topbarEl = document.getElementById('topbar');
+
+  const btnProto = document.createElement('button');
+  btnProto.className='tbtn'; btnProto.id='btnProtoboard'; btnProto.textContent='🧵 Protoboard';
+  topbarEl.appendChild(btnProto);
+  btnProto.addEventListener('click', ()=>{
+    window.protoboardMode = !window.protoboardMode;
+    btnProto.classList.toggle('on', window.protoboardMode);
+  });
+
+  const SPEEDS=[0.25,0.5,1,2,4];
+  let speedIdx=2;
+  const btnSpeed=document.createElement('button');
+  btnSpeed.className='tbtn'; btnSpeed.id='btnSimSpeed'; btnSpeed.textContent='⏱ 1x';
+  topbarEl.appendChild(btnSpeed);
+  btnSpeed.addEventListener('click', ()=>{
+    speedIdx=(speedIdx+1)%SPEEDS.length;
+    window.simSpeed=SPEEDS[speedIdx];
+    btnSpeed.textContent='⏱ '+SPEEDS[speedIdx]+'x';
+    btnSpeed.classList.toggle('on', SPEEDS[speedIdx]!==1);
+  });
+
+  // Redefine drawGrid soportando protoboard + zoom (mismo criterio del script de zoom)
+  drawGrid = function(){
+    const r = wrap.getBoundingClientRect();
+    if(!window.protoboardMode){
+      ctx.fillStyle = '#0b0f14'; ctx.fillRect(0,0,r.width,r.height);
+      ctx.fillStyle = '#1c2530';
+      const g = GRID*zoomScale;
+      if(g<3) return;
+      let startX = panX % g; if(startX<0) startX+=g;
+      let startY = panY % g; if(startY<0) startY+=g;
+      for(let x=startX;x<r.width;x+=g) for(let y=startY;y<r.height;y+=g) ctx.fillRect(x,y,1,1);
+      return;
+    }
+    // ---- modo protoboard ----
+    ctx.fillStyle = '#d8cba8'; ctx.fillRect(0,0,r.width,r.height);
+    const g = GRID*zoomScale;
+    if(g<4) return;
+    let startX = panX % g; if(startX<0) startX+=g;
+    let startY = panY % g; if(startY<0) startY+=g;
+
+    ctx.strokeStyle='rgba(200,40,40,.5)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(0,18); ctx.lineTo(r.width,18); ctx.stroke();
+    ctx.strokeStyle='rgba(40,80,200,.5)';
+    ctx.beginPath(); ctx.moveTo(0,r.height-18); ctx.lineTo(r.width,r.height-18); ctx.stroke();
+
+    ctx.fillStyle='rgba(70,55,30,.55)';
+    for(let x=startX;x<r.width;x+=g) for(let y=startY;y<r.height;y+=g){
+      ctx.beginPath(); ctx.arc(x,y, Math.max(1,g*0.08), 0, Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle='rgba(0,0,0,.06)';
+    ctx.fillRect(0, r.height/2-g*1.5, r.width, g*3);
+  };
+})();
+
+
+// ------------------------------------------------------------
+// PARTE E — Mejora #8: chispas al dañarse un componente
+//           + Mejora #7 (velocidad) aplicada al motor físico
+//           + loop() final integrando todo
+// ------------------------------------------------------------
+(function(){
+  // Escala el paso de tiempo físico según window.simSpeed sin tocar el resto del motor
+  const _origStep = CircuitSim.prototype.step;
+  CircuitSim.prototype.step = function(comps, wires, dt){
+    return _origStep.call(this, comps, wires, dt*(window.simSpeed||1));
+  };
+
+  const sparks = [];
+  const prevDamaged = new Map();
+  function extendedDamaged(c){
+    if(c.props.blown) return true;
+    if(c.props.failed) return true;
+    if(c.props.burned) return true;
+    if(c.type==='circuit_breaker' && c.props.tripped) return true;
+    return false;
+  }
+  function checkSparkTriggers(){
+    comps.forEach(c=>{
+      const now = extendedDamaged(c);
+      const before = prevDamaged.get(c.id) || false;
+      if(now && !before){ sparks.push({x:c.x,y:c.y,t0:performance.now()}); }
+      prevDamaged.set(c.id, now);
+    });
+  }
+  function drawSparks(){
+    const now = performance.now();
+    for(let i=sparks.length-1;i>=0;i--){
+      const s=sparks[i];
+      const age=(now-s.t0)/1000;
+      if(age>0.6){ sparks.splice(i,1); continue; }
+      const p = 1-age/0.6;
+      ctx.save();
+      ctx.translate(s.x,s.y);
+      ctx.globalAlpha = p;
+      for(let k=0;k<6;k++){
+        const ang = (k/6)*Math.PI*2 + age*8;
+        const len = 8+age*40;
+        ctx.strokeStyle = k%2? '#ffe14d':'#ff5c5c';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(ang)*len, Math.sin(ang)*len); ctx.stroke();
+      }
+      ctx.fillStyle='rgba(255,200,80,'+(p*0.5)+')';
+      ctx.beginPath(); ctx.arc(0,0,14*p,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  loop = function(now){
+    const dt = Math.min(0.05,(now-lastT)/1000); lastT=now;
+    particlePhase += dt*(window.simSpeed||1);
+    sim.step(comps, wires, dt);
+    comps.forEach(c=>{
+      if(COMPONENTS[c.type] && COMPONENTS[c.type].momentary && c.props.pressed){
+        c.state._momT = (c.state._momT||0) + dt;
+        if(c.state._momT > 0.25){ c.props.pressed = false; c.state._momT = 0; }
+      }
+    });
+
+    checkSparkTriggers();
+
+    if (scopeActive) {
+       const ch1CompId = document.getElementById('scopeCh1Comp')?.value;
+       const ch1Type = document.getElementById('scopeCh1Type')?.value;
+       const ch2CompId = document.getElementById('scopeCh2Comp')?.value;
+       const ch2Type = document.getElementById('scopeCh2Type')?.value;
+       const v1 = ch1CompId ? (comps.find(c=>c.id===ch1CompId)?.state?.[ch1Type] || 0) : null;
+       const v2 = ch2CompId ? (comps.find(c=>c.id===ch2CompId)?.state?.[ch2Type] || 0) : null;
+       scopeData.push({ t: sim.simTime, v1, v2 });
+       const win = parseFloat(document.getElementById('scopeWinSlider')?.value || 2);
+       while (scopeData.length > 0 && scopeData[0].t < sim.simTime - win - 0.2) scopeData.shift();
+       drawScope();
+    }
+
+    drawGrid();
+    ctx.save();
+    ctx.translate(panX, panY);
+    ctx.scale(zoomScale, zoomScale);
+    drawWires(); drawComponents();
+    drawSparks();
+    ctx.restore();
+    updateStatus();
+    requestAnimationFrame(loop);
+  };
+})();
+
+
+// ------------------------------------------------------------
+// PARTE F — Mejora #16: Guía interactiva paso a paso
+// ------------------------------------------------------------
+(function(){
+  const TUTORIAL_STEPS = [
+    {title:'👋 Bienvenido a Tecnoyork Electrónica', text:'Este simulador te permite armar circuitos electrónicos reales y ver cómo funcionan en tiempo real. Vamos a ver lo básico en unos pasos rápidos.'},
+    {title:'➕ Agregar componentes', text:'Toca "➕ Componentes" para abrir el catálogo. Busca la pieza que necesitas y tócala: quedará "en mano" lista para colocar. Luego toca el lienzo donde quieras ubicarla.'},
+    {title:'🔌 Conectar cables', text:'Activa "🔌 Cable", toca un terminal (círculo) de un componente y luego el terminal del otro que quieres unir. Así quedan conectados eléctricamente.'},
+    {title:'✂ Cortar cables', text:'Activa "✂ Cortar" y toca cualquier cable para eliminarlo del circuito.'},
+    {title:'▶ Encender el circuito', text:'Cuando termines de armar, toca "▶ Encender" para iniciar la simulación. Verás partículas moviéndose por los cables con corriente y los componentes reaccionando.'},
+    {title:'🌡️ Panel de Entorno', text:'Usa "🌡️ Entorno" para simular condiciones físicas: luz, temperatura, humedad, movimiento, etc. Así puedes probar sensores sin necesitar el mundo real.'},
+    {title:'⏱ Velocidad y 🧵 Protoboard', text:'Con "⏱" controlas la velocidad de la simulación (cámara lenta o rápida) y con "🧵 Protoboard" cambias el fondo del lienzo a estilo placa de pruebas.'},
+    {title:'📋 Lista de Materiales', text:'Toca "📋 Lista" para ver y descargar la lista de todos los componentes usados en tu circuito, con sus cantidades.'},
+    {title:'✅ ¡Listo!', text:'Toca cualquier componente colocado para ver sus propiedades editables, girarlo o borrarlo. ¡A experimentar!'}
+  ];
+  let tutStep = 0;
+
+  function renderTutorialStep(){
+    const s = TUTORIAL_STEPS[tutStep];
+    const html = `
+      <div style="padding:4px 2px;">
+        <h3 style="margin:0 0 10px;color:var(--accent);font-size:16px;">${s.title}</h3>
+        <p style="font-size:13px;line-height:1.6;color:var(--text);margin:0 0 18px;">${s.text}</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <span style="font-size:11px;color:var(--text-faint);font-family:monospace;">${tutStep+1} / ${TUTORIAL_STEPS.length}</span>
+          <div style="display:flex;gap:8px;">
+            <button class="tbtn" id="tutPrev" ${tutStep===0?'style="opacity:.35;pointer-events:none;"':''}>← Atrás</button>
+            <button class="tbtn on" id="tutNext">${tutStep===TUTORIAL_STEPS.length-1?'Finalizar ✓':'Siguiente →'}</button>
+          </div>
+        </div>
+      </div>`;
+    overlayTitle.textContent = '🎓 Guía Rápida';
+    overlayBody.innerHTML = html;
+    document.getElementById('tutNext').addEventListener('click', ()=>{
+      if(tutStep===TUTORIAL_STEPS.length-1){ closeOverlay(); storage.set('tecnoyork_tutorial_seen','1'); return; }
+      tutStep++; renderTutorialStep();
+    });
+    const prevBtn = document.getElementById('tutPrev');
+    if(prevBtn) prevBtn.addEventListener('click', ()=>{ if(tutStep>0){ tutStep--; renderTutorialStep(); } });
+  }
+  function openTutorial(){
+    tutStep=0;
+    overlayBackdrop.classList.add('open'); overlayModal.classList.add('open');
+    renderTutorialStep();
+  }
+
+  const btnTut = document.createElement('button');
+  btnTut.className='tbtn'; btnTut.id='btnTutorial'; btnTut.textContent='🎓 Guía';
+  document.getElementById('topbar').appendChild(btnTut);
+  btnTut.addEventListener('click', openTutorial);
+
+  try{
+    if(!storage.get('tecnoyork_tutorial_seen')) setTimeout(openTutorial, 600);
+  }catch(e){}
+})();
+
+
+// ------------------------------------------------------------
+// PARTE G — Mejora #18: Exportar Lista de Materiales (BOM)
+// ------------------------------------------------------------
+(function(){
+  function buildBOM(){
+    const counts = {};
+    comps.forEach(c=>{ counts[c.type] = (counts[c.type]||0)+1; });
+    return Object.keys(counts)
+      .sort((a,b)=> (COMPONENTS[a]?.label||a).localeCompare(COMPONENTS[b]?.label||b))
+      .map(type=>({ type, label: COMPONENTS[type]?.label || type, qty: counts[type] }));
+  }
+  function openBOM(){
+    const items = buildBOM();
+    let html = '';
+    if(!items.length){
+      html = '<div class="empty">El lienzo está vacío. Agrega componentes para generar la lista de materiales.</div>';
+    } else {
+      html = '<div class="slist">' + items.map(it=>
+        `<div class="sitem" style="cursor:default;">
+          <div class="name">${it.label}</div>
+          <div class="date" style="font-size:12px;color:var(--accent2,#39d3a8);font-weight:700;">x${it.qty}</div>
+        </div>`
+      ).join('') + '</div>';
+      html += `<div style="margin-top:14px;display:flex;gap:8px;">
+        <button class="tbtn on" id="bomDownload" style="flex:1;justify-content:center;">⬇ Descargar .txt</button>
+      </div>`;
+    }
+    openOverlay('📋 Lista de Materiales (BOM)', html);
+    const dlBtn = document.getElementById('bomDownload');
+    if(dlBtn){
+      dlBtn.addEventListener('click', ()=>{
+        let text = 'LISTA DE MATERIALES — Tecnoyork Electrónica\n' + '='.repeat(44) + '\n\n';
+        items.forEach(it=>{ text += `${String(it.qty).padStart(3,' ')}x  ${it.label}\n`; });
+        text += `\nTotal de piezas: ${items.reduce((a,b)=>a+b.qty,0)}\n`;
+        text += `Generado: ${new Date().toLocaleString()}\n`;
+        const blob = new Blob([text], {type:'text/plain'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'lista_materiales.txt';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    }
+  }
+  const btnBOM = document.createElement('button');
+  btnBOM.className='tbtn'; btnBOM.id='btnBOM'; btnBOM.textContent='📋 Lista';
+  document.getElementById('topbar').appendChild(btnBOM);
+  btnBOM.addEventListener('click', openBOM);
 })();
 </script>
 <script>
