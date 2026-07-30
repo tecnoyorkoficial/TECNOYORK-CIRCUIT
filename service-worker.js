@@ -1,4 +1,4 @@
-const CACHE_NAME = "circuitlab-cache-v1.11";
+const CACHE_NAME = "circuitlab-cache-v1.13";
 const ASSETS = [
   "./",
   "./index.html",
