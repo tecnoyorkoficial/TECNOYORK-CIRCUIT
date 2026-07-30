@@ -6602,7 +6602,181 @@ if(COMPONENTS.comparator){
     return {ids, termId, refNode, totalTerminals:n};
   };
 })();
-</script>               
+</script>
+<script>
+// ============================================================
+// fix-pulldown-entradas-logicas.js — Corrige el bug real:
+// las entradas de compuertas no tenían ninguna resistencia hacia
+// tierra, así que un interruptor "abierto" (modelado como
+// resistencia gigante, no como desconexión real) dejaba la
+// entrada flotando en el mismo voltaje que el lado conectado,
+// sin importar si el switch estaba abierto o cerrado.
+// Esto agrega una resistencia pull-down interna (1MΩ) a cada
+// entrada digital, para que sin nada conectado lean LOW real.
+// ============================================================
+(function(){
+
+const PULLDOWN_R = 1e6; // 1MΩ — débil, no afecta cuando hay algo real conectado
+
+function addPulldown(type, inPinNames){
+  const def = COMPONENTS[type]; if(!def) return;
+  const pinIdx = inPinNames.map(name => def.terminals.findIndex(t=>t.name===name));
+  const origEdges = def.edges;
+  def.edges = function(c){
+    const base = origEdges(c) || [];
+    pinIdx.forEach(idx=>{
+      if(idx>=0) base.push({n:[idx,'GND'], type:'R', value:PULLDOWN_R});
+    });
+    return base;
+  };
+}
+
+// Compuertas de 2 entradas
+['gate_and','gate_or','gate_nand','gate_nor','gate_xor','gate_xnor'].forEach(type=>{
+  addPulldown(type, ['in1','in2']);
+});
+// Compuertas de 1 entrada
+addPulldown('gate_not', ['in']);
+addPulldown('gate_buffer', ['in']);
+// SR Latch
+addPulldown('sr_latch', ['S','R']);
+// Schmitt trigger
+addPulldown('schmitt_trigger', ['in']);
+// Comparador
+addPulldown('comparator', ['in+','in-']);
+
+})();
+</script>
+<script>
+// ============================================================
+// fix-polaridad-salida-logica.js — Corrige el bug de signo real:
+// la salida de las compuertas se estampaba como V(GND)-V(out)=value
+// en vez de V(out)-V(GND)=value, invirtiendo el signo del HIGH.
+// Confirmado con datos reales: out daba -9V en vez de +9V.
+// ============================================================
+(function(){
+
+function findPin(def, name){ return def.terminals.findIndex(t=>t.name===name); }
+function effVcc(c, vI, gI, fallback){
+  if(vI<0 || gI<0) return fallback;
+  const vcc = (c.state?.['Vt'+vI]||0) - (c.state?.['Vt'+gI]||0);
+  return vcc >= 3.0 ? vcc : fallback;
+}
+// Orden CORRECTO: n=[GND_local, out] => V(out) - V(GND_local) = value
+// => V(out) = V(GND_local) + value  (si GND_local=0V, out=value exacto)
+function gateOutEdgeFixed(outIdx, gI, valueFn){
+  return function(c){
+    return [{n:[gI, outIdx], type:'GATEOUT', value: valueFn(c), tag:'gate', Rint:10}];
+  };
+}
+
+const GATE_FN = {
+  gate_and:(a,b)=>a&&b, gate_or:(a,b)=>a||b, gate_nand:(a,b)=>!(a&&b),
+  gate_nor:(a,b)=>!(a||b), gate_xor:(a,b)=>a!==b, gate_xnor:(a,b)=>a===b
+};
+Object.keys(GATE_FN).forEach(type=>{
+  const def = COMPONENTS[type]; if(!def) return;
+  const fn = GATE_FN[type];
+  const outI = findPin(def,'out');
+  const vI = findPin(def,'VCC'), gI = findPin(def,'GND');
+  def.edges = gateOutEdgeFixed(outI, gI, c=>{
+    const vcc = effVcc(c, vI, gI, c.props.Vcc);
+    const a=(c.state?.Vin0||0)>vcc/2, b=(c.state?.Vin1||0)>vcc/2;
+    return fn(a,b)? vcc:0;
+  });
+});
+
+['gate_not','gate_buffer'].forEach(type=>{
+  const def = COMPONENTS[type]; if(!def) return;
+  const isNot = type==='gate_not';
+  const outI = findPin(def,'out');
+  const vI = findPin(def,'VCC'), gI = findPin(def,'GND');
+  def.edges = gateOutEdgeFixed(outI, gI, c=>{
+    const vcc = effVcc(c, vI, gI, c.props.Vcc);
+    const a = (c.state?.Vin0||0) > vcc/2;
+    const out = isNot? !a : a;
+    return out? vcc:0;
+  });
+});
+
+if(COMPONENTS.sr_latch){
+  const def = COMPONENTS.sr_latch;
+  const qI = findPin(def,'Q'), qbI = findPin(def,'Q̄');
+  const vI = findPin(def,'VCC'), gI = findPin(def,'GND');
+  def.step = function(c, dt){
+    const vcc = effVcc(c, vI, gI, c.props.Vcc);
+    const S=(c.state?.Vin0||0)>vcc/2, R=(c.state?.Vin1||0)>vcc/2;
+    let q = c.state.Q ?? false;
+    if(S&&!R) q=true; else if(R&&!S) q=false; else if(S&&R) q=false;
+    c.state.Q=q;
+  };
+  def.edges = function(c){
+    const vcc = effVcc(c, vI, gI, c.props.Vcc);
+    const q = c.state?.Q ?? false;
+    return [
+      {n:[gI,qI],  type:'GATEOUT', value: q? vcc:0, tag:'gate', Rint:10},
+      {n:[gI,qbI], type:'GATEOUT', value: q? 0:vcc, tag:'gate', Rint:10}
+    ];
+  };
+}
+
+if(COMPONENTS.schmitt_trigger){
+  const def = COMPONENTS.schmitt_trigger;
+  const outI = findPin(def,'out');
+  const vI = findPin(def,'VCC'), gI = findPin(def,'GND');
+  def.edges = gateOutEdgeFixed(outI, gI, c=>{
+    const vcc = effVcc(c, vI, gI, c.props.Vcc);
+    const hi = c.state?.hi ?? false;
+    return (!hi)? vcc:0;
+  });
+  def.postSolve = function(c){
+    const Vin = c.state?.Vt0||0;
+    let hi = c.state?.hi ?? false;
+    if(!hi && Vin > c.props.Vhigh) hi = true;
+    else if(hi && Vin < c.props.Vlow) hi = false;
+    c.state.hi = hi;
+  };
+}
+
+})();
+</script>
+<script>
+// ============================================================
+// fix-polaridad-salidas-sensores-modulos.js — Corrige el mismo
+// bug de signo del NOT (orden de nodos invertido en type:'V')
+// en otros 12 componentes detectados por revisión sistemática.
+// ============================================================
+(function(){
+
+function swapEdgeNodes(type, pairsToSwap){
+  const def = COMPONENTS[type]; if(!def) return;
+  const orig = def.edges;
+  def.edges = function(c, sim){
+    const edges = orig.call(this, c, sim) || [];
+    edges.forEach(e=>{
+      const match = pairsToSwap.some(p => e.n[0]===p[0] && e.n[1]===p[1]);
+      if(match){ const tmp=e.n[0]; e.n[0]=e.n[1]; e.n[1]=tmp; }
+    });
+    return edges;
+  };
+}
+
+swapEdgeNodes('hall_sensor',            [[2,'GND']]);
+swapEdgeNodes('hall_linear_sensor',     [[2,'GND']]);
+swapEdgeNodes('tp4056_charger',         [[2,3]]);
+swapEdgeNodes('lm386_amplifier',        [[4,3]]);
+swapEdgeNodes('opamp',                  [[4,'GND']]);
+swapEdgeNodes('timer555',               [[4,'GND']]);
+swapEdgeNodes('current_sensor_acs712',  [[4,3]]);
+swapEdgeNodes('gas_sensor',             [[3,1],[2,1]]);
+swapEdgeNodes('bluetooth_module',       [[4,1]]);
+swapEdgeNodes('dcdc',                   [[2,3]]);
+swapEdgeNodes('l298n_hbridge',          [[7,1],[8,1],[9,1],[10,1]]);
+swapEdgeNodes('a4988_driver',           [[6,1],[7,1],[8,1],[9,1]]);
+
+})();
+</script>
+
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -6610,6 +6784,29 @@ if(COMPONENTS.comparator){
         .catch(err => console.warn('No se pudo registrar el service worker:', err));
     });
   }
+</script>
+<script>
+  // fix-tierra-simbolos-unidos.js — Une automáticamente TODOS los
+  // símbolos de "Tierra (GND)" en un mismo nodo de 0V (rail común),
+  // sin necesitar cablearlos entre sí. Requiere que AL MENOS uno
+  // esté conectado al retorno real de tu fuente (ej. el "−" de la pila).
+  (function() {
+    const _origCollectEdges = CircuitSim.prototype.collectEdges;
+    CircuitSim.prototype.collectEdges = function(comps, wires, topo) {
+      const edges = _origCollectEdges.call(this, comps, wires, topo);
+      const grounds = comps.filter(c => DEF(c).isGround);
+      if (grounds.length > 1) {
+        const refId = topo.ids.get(topo.termId(grounds[0].id, 0));
+        for (let i = 1; i < grounds.length; i++) {
+          const gid = topo.ids.get(topo.termId(grounds[i].id, 0));
+          if (gid !== undefined && refId !== undefined) {
+            edges.push({ n1: refId, n2: gid, type: 'R', value: WIRE_R, owner: null });
+          }
+        }
+      }
+      return edges;
+    };
+  })();
 </script>
 </body>
 </html>
