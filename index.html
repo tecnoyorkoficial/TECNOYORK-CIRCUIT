@@ -6776,7 +6776,665 @@ swapEdgeNodes('a4988_driver',           [[6,1],[7,1],[8,1],[9,1]]);
 
 })();
 </script>
+<script>
+// ============================================================
+// edicion-sonido-ejemplos-tabla.js — Deshacer/Rehacer, selección
+// múltiple + copiar/pegar, doblez de cables, rotación 45°, sonido,
+// circuitos de ejemplo y generador de tabla de verdad.
+// Pegar al final, justo antes de </body>.
+// ============================================================
+(function(){
 
+const topbarEl = document.getElementById('topbar');
+const quickActionsEl = document.getElementById('quickActions');
+
+// ------------------------------------------------------------
+// PARTE A — Estado nuevo + barra flotante de selección múltiple
+// ------------------------------------------------------------
+let multiSelectMode = false;
+let bendMode = false;
+let multiSelected = new Set();
+let groupDragState = null;
+let bendDrag = null;
+let clipboardData = null;
+
+const multiBar = document.createElement('div');
+multiBar.id = 'multiBar';
+multiBar.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:8px;display:none;gap:8px;z-index:16;flex-wrap:wrap;justify-content:center;max-width:92%;';
+wrap.appendChild(multiBar);
+
+function refreshMultiSelectUI(){
+  const show = multiSelectMode || multiSelected.size>0;
+  multiBar.style.display = show? 'flex':'none';
+  multiBar.innerHTML = '';
+  if(!show) return;
+  const info = document.createElement('div');
+  info.className = 'chip';
+  info.textContent = multiSelected.size+' seleccionado(s)';
+  multiBar.appendChild(info);
+  if(multiSelected.size>0){
+    const bCopy=document.createElement('button'); bCopy.className='tbtn on'; bCopy.textContent='📋 Copiar';
+    bCopy.addEventListener('click', ()=>{ copySelection(); refreshMultiSelectUI(); });
+    multiBar.appendChild(bCopy);
+    const bDel=document.createElement('button'); bDel.className='tbtn danger'; bDel.textContent='🗑 Eliminar';
+    bDel.addEventListener('click', deleteSelection);
+    multiBar.appendChild(bDel);
+  }
+  const bExit=document.createElement('button'); bExit.className='tbtn'; bExit.textContent='✕ Salir';
+  bExit.addEventListener('click', exitMultiSelect);
+  multiBar.appendChild(bExit);
+}
+function toggleMultiSelect(id){
+  if(multiSelected.has(id)) multiSelected.delete(id); else multiSelected.add(id);
+  refreshMultiSelectUI();
+}
+function exitMultiSelect(){
+  multiSelectMode=false; multiSelected.clear();
+  document.getElementById('btnMultiSelect')?.classList.remove('on');
+  refreshMultiSelectUI();
+}
+function copySelection(){
+  if(!multiSelected.size) return;
+  const ids = new Set(multiSelected);
+  clipboardData = {
+    comps: comps.filter(c=>ids.has(c.id)).map(c=>({id:c.id,type:c.type,x:c.x,y:c.y,rot:c.rot,props:JSON.parse(JSON.stringify(c.props))})),
+    wires: wires.filter(w=>ids.has(w.a.compId)&&ids.has(w.b.compId)).map(w=>({a:{...w.a},b:{...w.b},bends:(w.bends||[]).map(p=>({...p}))}))
+  };
+  document.getElementById('btnPaste')?.classList.add('on');
+}
+function deleteSelection(){
+  const ids = new Set(multiSelected);
+  wires = wires.filter(w=> !ids.has(w.a.compId) && !ids.has(w.b.compId));
+  comps = comps.filter(c=> !ids.has(c.id));
+  multiSelected.clear();
+  selectComponent(null);
+  refreshMultiSelectUI(); updateModeUI(); commitHistory();
+}
+function pasteClipboard(){
+  if(!clipboardData || !clipboardData.comps.length) return;
+  const idMap = new Map();
+  const newComps = clipboardData.comps.map(c=>{
+    const newId = 'c'+(nextId++);
+    idMap.set(c.id, newId);
+    const def = COMPONENTS[c.type];
+    return { id:newId, type:c.type, x:snap(c.x+40), y:snap(c.y+40), rot:c.rot,
+      props: JSON.parse(JSON.stringify(c.props)),
+      terminals: JSON.parse(JSON.stringify(def.terminals)), state:{} };
+  });
+  const newWires = clipboardData.wires.map(w=>({
+    a:{compId:idMap.get(w.a.compId), term:w.a.term},
+    b:{compId:idMap.get(w.b.compId), term:w.b.term},
+    bends:(w.bends||[]).map(p=>({x:p.x+40,y:p.y+40}))
+  }));
+  comps.push(...newComps);
+  wires.push(...newWires);
+  multiSelected = new Set(newComps.map(c=>c.id));
+  multiSelectMode = false;
+  selectComponent(null);
+  refreshMultiSelectUI();
+  commitHistory();
+}
+
+// ------------------------------------------------------------
+// PARTE B — Doblez manual de cables (bends) + hitWire/pathForWire
+// ------------------------------------------------------------
+const _origPathForWire = pathForWire;
+pathForWire = function(a,b,bends){
+  if(bends && bends.length){
+    const pts=[[a.x,a.y]];
+    bends.forEach(pt=>pts.push([pt.x,pt.y]));
+    pts.push([b.x,b.y]);
+    return pts;
+  }
+  return _origPathForWire(a,b);
+};
+
+function hitBendHandle(x,y){
+  const thr = 10/zoomScale;
+  for(let i=wires.length-1;i>=0;i--){
+    const w=wires[i];
+    if(!w.bends) continue;
+    for(let j=0;j<w.bends.length;j++){
+      const pt=w.bends[j];
+      if(Math.hypot(pt.x-x,pt.y-y)<thr) return {wire:w, index:j};
+    }
+  }
+  return null;
+}
+
+hitWire = function(x,y){
+  const thr = 10/zoomScale;
+  for(let i=wires.length-1;i>=0;i--){
+    const w=wires[i];
+    const ca=comps.find(c=>c.id===w.a.compId), cb=comps.find(c=>c.id===w.b.compId);
+    if(!ca||!cb) continue;
+    const pa=termAbs(ca,w.a.term), pb=termAbs(cb,w.b.term);
+    const pts = pathForWire(pa,pb,w.bends);
+    for(let s=1;s<pts.length;s++){
+      if(distToSeg(x,y,pts[s-1][0],pts[s-1][1],pts[s][0],pts[s][1]) < thr) return w;
+    }
+  }
+  return null;
+};
+
+drawWires = function(){
+  wires.forEach(w=>{
+    const ca=comps.find(c=>c.id===w.a.compId), cb=comps.find(c=>c.id===w.b.compId);
+    if(!ca||!cb) return;
+    const pa=termAbs(ca,w.a.term), pb=termAbs(cb,w.b.term);
+    const pts = pathForWire(pa,pb,w.bends);
+    const I = Math.max(Math.abs(ca.state?.I||0), Math.abs(cb.state?.I||0));
+    const on = sim.powered && I>0.0008;
+    ctx.strokeStyle = on? COL_WIRE_ON : COL_WIRE_OFF;
+    ctx.lineWidth = on? 3 : 2.4; ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.beginPath(); pts.forEach((p,i)=> i? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1])); ctx.stroke();
+    if(on){
+      const totalLen = segLen(pts);
+      const speed = Math.min(220, 40+Math.abs(I)*4000);
+      const nDots = Math.max(1, Math.floor(totalLen/26));
+      for(let i=0;i<nDots;i++){
+        let d = ((particlePhase*speed) + i*(totalLen/nDots)) % totalLen;
+        if(I<0) d = totalLen-d;
+        const pt = pointAtLen(pts,d);
+        ctx.beginPath(); ctx.arc(pt.x,pt.y,2.6,0,Math.PI*2);
+        ctx.fillStyle='#fff3d6'; ctx.fill();
+      }
+    }
+    drawTerminalDot(ctx,pa.x,pa.y, true); drawTerminalDot(ctx,pb.x,pb.y, true);
+    if(bendMode && w.bends && w.bends.length){
+      w.bends.forEach(pt=>{
+        ctx.beginPath(); ctx.arc(pt.x,pt.y,5/zoomScale,0,Math.PI*2);
+        ctx.fillStyle='#4da6ff'; ctx.fill();
+        ctx.strokeStyle='#eef2f7'; ctx.lineWidth=1/zoomScale; ctx.stroke();
+      });
+    }
+  });
+};
+
+const _origDrawComponents = drawComponents;
+drawComponents = function(){
+  _origDrawComponents();
+  if(multiSelected.size){
+    multiSelected.forEach(id=>{
+      const c = comps.find(cc=>cc.id===id);
+      if(!c) return;
+      ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.rot*Math.PI/180);
+      ctx.strokeStyle='#4da6ff'; ctx.setLineDash([3,3]); ctx.lineWidth=1.6/zoomScale;
+      ctx.strokeRect(-46,-40,92,80);
+      ctx.restore();
+    });
+  }
+};
+
+// ------------------------------------------------------------
+// PARTE C — Captura de gestos (multi-select, doblez, arrastre grupal)
+// Usa fase de captura sobre #canvasWrap para no romper el arrastre
+// normal de un solo componente (mismo patrón que el pellizco de zoom).
+// ------------------------------------------------------------
+function handleWrapStart(ev){
+  if(ev.touches && ev.touches.length===2) return;
+  const sp=getPos(ev); const p=toWorld(sp);
+
+  if(bendMode){
+    ev.preventDefault(); ev.stopPropagation();
+    const hit = hitBendHandle(p.x,p.y);
+    if(hit){ bendDrag={wire:hit.wire, index:hit.index, spStart:sp, moved:false}; return; }
+    const w = hitWire(p.x,p.y);
+    if(w){ w.bends = w.bends||[]; w.bends.push({x:snap(p.x), y:snap(p.y)}); commitHistory(); }
+    return;
+  }
+  if(multiSelectMode){
+    ev.preventDefault(); ev.stopPropagation();
+    const hitC = hitComponent(p.x,p.y);
+    if(hitC) toggleMultiSelect(hitC.id);
+    return;
+  }
+  if(multiSelected.size>1){
+    const hitC = hitComponent(p.x,p.y);
+    if(hitC && multiSelected.has(hitC.id)){
+      ev.preventDefault(); ev.stopPropagation();
+      const points = new Map();
+      multiSelected.forEach(id=>{ const c=comps.find(cc=>cc.id===id); if(c) points.set(id,{x:c.x,y:c.y}); });
+      groupDragState = {points, anchor:p};
+      return;
+    }
+  }
+}
+function handleWrapMove(ev){
+  if(ev.touches && ev.touches.length===2) return;
+  if(bendDrag){
+    ev.preventDefault(); ev.stopPropagation();
+    const sp=getPos(ev); const p=toWorld(sp);
+    if(!bendDrag.moved){
+      if(Math.hypot(sp.x-bendDrag.spStart.x, sp.y-bendDrag.spStart.y)>5) bendDrag.moved=true;
+    }
+    if(bendDrag.moved) bendDrag.wire.bends[bendDrag.index] = {x:snap(p.x), y:snap(p.y)};
+    return;
+  }
+  if(groupDragState){
+    ev.preventDefault(); ev.stopPropagation();
+    const sp=getPos(ev); const p=toWorld(sp);
+    const dx=p.x-groupDragState.anchor.x, dy=p.y-groupDragState.anchor.y;
+    groupDragState.points.forEach((orig,id)=>{
+      const c=comps.find(cc=>cc.id===id);
+      if(c){ c.x=snap(orig.x+dx); c.y=snap(orig.y+dy); }
+    });
+    return;
+  }
+}
+function handleWrapEnd(ev){
+  if(bendDrag){
+    if(!bendDrag.moved) bendDrag.wire.bends.splice(bendDrag.index,1);
+    bendDrag=null; commitHistory(); return;
+  }
+  if(groupDragState){ groupDragState=null; commitHistory(); return; }
+}
+wrap.addEventListener('touchstart', handleWrapStart, {capture:true, passive:false});
+wrap.addEventListener('mousedown', handleWrapStart, {capture:true});
+wrap.addEventListener('touchmove', handleWrapMove, {capture:true, passive:false});
+wrap.addEventListener('mousemove', handleWrapMove, {capture:true});
+wrap.addEventListener('touchend', handleWrapEnd, {capture:true});
+wrap.addEventListener('mouseup', handleWrapEnd, {capture:true});
+
+// ------------------------------------------------------------
+// PARTE D — Deshacer / Rehacer
+// ------------------------------------------------------------
+let undoStack=[], redoStack=[];
+
+function snapshotState(){
+  return JSON.stringify({
+    comps: comps.map(c=>({id:c.id,type:c.type,x:c.x,y:c.y,rot:c.rot,props:c.props})),
+    wires: wires.map(w=>({a:{...w.a}, b:{...w.b}, bends:(w.bends||[]).map(p=>({x:p.x,y:p.y}))}))
+  });
+}
+function restoreSnapshot(str){
+  const data = JSON.parse(str);
+  comps = (data.comps||[]).map(c=>{
+    const def = COMPONENTS[c.type]; if(!def) return null;
+    return { id:c.id, type:c.type, x:c.x, y:c.y, rot:c.rot,
+      props: JSON.parse(JSON.stringify(c.props)),
+      terminals: JSON.parse(JSON.stringify(def.terminals)), state:{} };
+  }).filter(Boolean);
+  wires = (data.wires||[]).map(w=>({a:{...w.a}, b:{...w.b}, bends:(w.bends||[]).map(p=>({...p}))}));
+  nextId = comps.length? Math.max(...comps.map(c=>parseInt(String(c.id).replace('c',''))||0))+1 : 1;
+  selectComponent(null);
+  multiSelected.clear(); groupDragState=null; bendDrag=null;
+  wireStart=null; selectedType=null;
+  updatePlacingChip(); updateModeUI(); refreshMultiSelectUI();
+}
+function commitHistory(){
+  const cur = snapshotState();
+  if(cur !== lastSnapshotStr){
+    undoStack.push(lastSnapshotStr);
+    if(undoStack.length>60) undoStack.shift();
+    redoStack.length = 0;
+    lastSnapshotStr = cur;
+    updateHistoryButtons();
+  }
+}
+function undo(){
+  if(!undoStack.length) return;
+  const cur = snapshotState();
+  const prev = undoStack.pop();
+  redoStack.push(cur);
+  lastSnapshotStr = prev;
+  restoreSnapshot(prev);
+  updateHistoryButtons();
+}
+function redo(){
+  if(!redoStack.length) return;
+  const cur = snapshotState();
+  const next = redoStack.pop();
+  undoStack.push(cur);
+  lastSnapshotStr = next;
+  restoreSnapshot(next);
+  updateHistoryButtons();
+}
+function updateHistoryButtons(){
+  const bu=document.getElementById('btnUndo'), br=document.getElementById('btnRedo');
+  if(bu) bu.style.opacity = undoStack.length? '1':'0.35';
+  if(br) br.style.opacity = redoStack.length? '1':'0.35';
+}
+let lastSnapshotStr = snapshotState();
+setInterval(commitHistory, 900);
+window.addEventListener('keydown', (ev)=>{
+  if((ev.ctrlKey||ev.metaKey) && ev.key.toLowerCase()==='z'){ ev.preventDefault(); if(ev.shiftKey) redo(); else undo(); }
+  if((ev.ctrlKey||ev.metaKey) && ev.key.toLowerCase()==='y'){ ev.preventDefault(); redo(); }
+});
+
+// ------------------------------------------------------------
+// PARTE E — Sonido (Web Audio API)
+// ------------------------------------------------------------
+let audioCtx=null, soundEnabled=true;
+function ensureAudio(){
+  if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+}
+document.addEventListener('pointerdown', ensureAudio, {once:true});
+document.addEventListener('touchstart', ensureAudio, {once:true});
+
+function playClick(freq=320, dur=0.04){
+  if(!soundEnabled || !audioCtx) return;
+  const t=audioCtx.currentTime;
+  const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain();
+  osc.type='square'; osc.frequency.value=freq;
+  gain.gain.setValueAtTime(0.001,t);
+  gain.gain.exponentialRampToValueAtTime(0.14,t+0.005);
+  gain.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t+dur+0.02);
+}
+function playPop(){
+  if(!soundEnabled || !audioCtx) return;
+  const t=audioCtx.currentTime;
+  const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain();
+  osc.type='sawtooth'; osc.frequency.setValueAtTime(500,t); osc.frequency.exponentialRampToValueAtTime(60,t+0.15);
+  gain.gain.setValueAtTime(0.15,t); gain.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t+0.2);
+}
+const activeTones = new Map();
+function startTone(id, freq, type){
+  if(!soundEnabled || !audioCtx || activeTones.has(id)) return;
+  const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain();
+  osc.type=type||'square'; osc.frequency.value=freq;
+  gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.06, audioCtx.currentTime+0.03);
+  osc.connect(gain); gain.connect(audioCtx.destination); osc.start();
+  activeTones.set(id,{osc,gain});
+}
+function stopTone(id){
+  const t=activeTones.get(id); if(!t) return;
+  const now=audioCtx.currentTime;
+  try{ t.gain.gain.exponentialRampToValueAtTime(0.0001, now+0.05); t.osc.stop(now+0.08); }catch(e){}
+  activeTones.delete(id);
+}
+const prevPulled = new Map();
+const prevDamagedSnd = new Map();
+setInterval(()=>{
+  if(!soundEnabled || !audioCtx){ return; }
+  comps.forEach(c=>{
+    if(c.type==='buzzer'){
+      const on = sim.powered && Math.abs(c.state?.I||0)>0.01;
+      if(on) startTone(c.id,700); else stopTone(c.id);
+    } else if(c.type==='active_buzzer'){
+      const V=(c.state?.Vt0||0)-(c.state?.Vt1||0);
+      const on = sim.powered && V > c.props.Vth;
+      if(on) startTone(c.id,950); else stopTone(c.id);
+    } else if(c.type==='passive_buzzer'){
+      const on = sim.powered && (c.state._flipTimer||0) > 0.05;
+      if(on) startTone(c.id,600,'sine'); else stopTone(c.id);
+    } else if(c.type==='speaker'){
+      const on = sim.powered && Math.abs(c.state?.I||0)>0.01;
+      if(on) startTone(c.id,440,'triangle'); else stopTone(c.id);
+    }
+    if(c.type==='relay' || c.type==='power_contactor'){
+      const pulled = sim.powered && Math.abs(c.state?.Icoil||0) >= c.props.Ipull;
+      const before = prevPulled.get(c.id)||false;
+      if(pulled!==before){ playClick(pulled?260:180); prevPulled.set(c.id,pulled); }
+    }
+    if(c.type==='solenoid'){
+      const pulled = (c.state.ext||0)>0.5;
+      const before = prevPulled.get(c.id)||false;
+      if(pulled!==before){ playClick(pulled?300:150); prevPulled.set(c.id,pulled); }
+    }
+    const damaged = !!(c.props.blown||c.props.failed||c.props.burned);
+    const wasDamaged = prevDamagedSnd.get(c.id)||false;
+    if(damaged && !wasDamaged) playPop();
+    prevDamagedSnd.set(c.id, damaged);
+  });
+  if(!sim.powered) activeTones.forEach((v,id)=>stopTone(id));
+}, 120);
+
+['switch_sw','pushbutton','pushbutton_nc','reed_switch','dip_switch','switch_spdt','dpdt_switch','tilt_switch','circuit_breaker','limit_switch','menu_button','lighted_pushbutton'].forEach(type=>{
+  const def=COMPONENTS[type];
+  if(def && def.onTap){
+    const orig=def.onTap;
+    def.onTap=function(c){ playClick(320,0.03); orig(c); };
+  }
+});
+
+// ------------------------------------------------------------
+// PARTE F — Circuitos de ejemplo
+// ------------------------------------------------------------
+function loadCircuitFromData(data){
+  comps = (data.comps||[]).map(c=>{
+    const def = COMPONENTS[c.type]; if(!def) return null;
+    return { id:c.id, type:c.type, x:c.x, y:c.y, rot:c.rot||0,
+      props: JSON.parse(JSON.stringify(c.props)),
+      terminals: JSON.parse(JSON.stringify(def.terminals)), state:{} };
+  }).filter(Boolean);
+  wires = (data.wires||[]).map(w=>({a:{...w.a}, b:{...w.b}, bends:(w.bends||[]).map(p=>({...p}))}));
+  nextId = comps.length? Math.max(...comps.map(c=>parseInt(String(c.id).replace('c',''))||0))+1 : 1;
+  selectComponent(null); wireStart=null; selectedType=null; sim.powered=false;
+  const bp=document.getElementById('btnPower'); if(bp){ bp.textContent='▶ Encender'; bp.classList.remove('on'); }
+  updatePlacingChip(); updateModeUI();
+  multiSelected.clear(); multiSelectMode=false; bendMode=false; groupDragState=null; bendDrag=null;
+  document.getElementById('btnMultiSelect')?.classList.remove('on');
+  document.getElementById('btnBend')?.classList.remove('on');
+  refreshMultiSelectUI();
+  document.getElementById('btnCenter')?.click();
+  lastSnapshotStr = snapshotState(); undoStack.length=0; redoStack.length=0; updateHistoryButtons();
+}
+
+const EXAMPLE_CIRCUITS = [
+  { name:'LED con Resistencia', desc:'El circuito más básico: una pila enciende un LED protegido por una resistencia.',
+    comps:[
+      {id:'c1',type:'battery',x:-160,y:0,rot:0,props:{V:9}},
+      {id:'c2',type:'resistor',x:-20,y:0,rot:0,props:{R:470}},
+      {id:'c3',type:'led',x:120,y:0,rot:0,props:{Vf:2.0,color:'#ff3b3b',Imax:0.025,burned:false}}
+    ],
+    wires:[
+      {a:{compId:'c1',term:1},b:{compId:'c2',term:0}},
+      {a:{compId:'c2',term:1},b:{compId:'c3',term:0}},
+      {a:{compId:'c3',term:1},b:{compId:'c1',term:0}, bends:[{x:0,y:100}]}
+    ]},
+  { name:'Interruptor + LED', desc:'Un interruptor controla el paso de corriente hacia el LED.',
+    comps:[
+      {id:'c1',type:'battery',x:-200,y:0,rot:0,props:{V:9}},
+      {id:'c2',type:'switch_sw',x:-60,y:0,rot:0,props:{closed:false}},
+      {id:'c3',type:'resistor',x:60,y:0,rot:0,props:{R:470}},
+      {id:'c4',type:'led',x:180,y:0,rot:0,props:{Vf:2.0,color:'#ff3b3b',Imax:0.025,burned:false}}
+    ],
+    wires:[
+      {a:{compId:'c1',term:1},b:{compId:'c2',term:0}},
+      {a:{compId:'c2',term:1},b:{compId:'c3',term:0}},
+      {a:{compId:'c3',term:1},b:{compId:'c4',term:0}},
+      {a:{compId:'c4',term:1},b:{compId:'c1',term:0}, bends:[{x:0,y:100}]}
+    ]},
+  { name:'Sensor de Luz (LDR + Transistor)', desc:'Con más luz sobre el LDR el transistor conduce y enciende el LED. Ajusta la luz en 🌡️ Entorno.',
+    comps:[
+      {id:'c1',type:'battery',x:-320,y:0,rot:0,props:{V:9}},
+      {id:'c2',type:'ldr',x:-160,y:0,rot:0,props:{light:0.5,Rmin:80,Rmax:20000}},
+      {id:'c3',type:'resistor',x:-20,y:0,rot:0,props:{R:4700}},
+      {id:'c4',type:'transistor_npn',x:-100,y:140,rot:0,props:{Vbe:0.6,gain:100,modelo:'Genérico'}},
+      {id:'c5',type:'resistor',x:60,y:106,rot:0,props:{R:330}},
+      {id:'c6',type:'led',x:180,y:106,rot:0,props:{Vf:2.0,color:'#ff3b3b',Imax:0.025,burned:false}}
+    ],
+    wires:[
+      {a:{compId:'c2',term:0},b:{compId:'c1',term:1}},
+      {a:{compId:'c2',term:1},b:{compId:'c3',term:0}},
+      {a:{compId:'c2',term:1},b:{compId:'c4',term:0}},
+      {a:{compId:'c3',term:1},b:{compId:'c1',term:0}},
+      {a:{compId:'c1',term:1},b:{compId:'c5',term:0}},
+      {a:{compId:'c5',term:1},b:{compId:'c6',term:0}},
+      {a:{compId:'c6',term:1},b:{compId:'c4',term:1}},
+      {a:{compId:'c4',term:2},b:{compId:'c1',term:0}, bends:[{x:-80,y:220},{x:-360,y:220}]}
+    ]},
+  { name:'Relé controlado por Interruptor', desc:'El interruptor activa la bobina; el relé enciende el LED al pasar com→no.',
+    comps:[
+      {id:'c1',type:'battery',x:-300,y:0,rot:0,props:{V:4}},
+      {id:'c2',type:'switch_sw',x:-180,y:0,rot:0,props:{closed:false}},
+      {id:'c3',type:'relay',x:-20,y:0,rot:0,props:{Rcoil:400,Ipull:0.008}},
+      {id:'c4',type:'resistor',x:-180,y:140,rot:0,props:{R:220}},
+      {id:'c5',type:'led',x:-20,y:140,rot:0,props:{Vf:2.0,color:'#ff3b3b',Imax:0.025,burned:false}}
+    ],
+    wires:[
+      {a:{compId:'c1',term:1},b:{compId:'c2',term:0}},
+      {a:{compId:'c2',term:1},b:{compId:'c3',term:0}},
+      {a:{compId:'c3',term:1},b:{compId:'c1',term:0}},
+      {a:{compId:'c1',term:1},b:{compId:'c4',term:0}},
+      {a:{compId:'c4',term:1},b:{compId:'c5',term:0}},
+      {a:{compId:'c5',term:1},b:{compId:'c3',term:2}},
+      {a:{compId:'c3',term:3},b:{compId:'c1',term:0}, bends:[{x:20,y:220},{x:-340,y:220}]}
+    ]},
+  { name:'Compuerta AND con 2 Interruptores', desc:'El LED solo enciende cuando ambos interruptores están cerrados.',
+    comps:[
+      {id:'c1',type:'battery',x:-320,y:0,rot:0,props:{V:5}},
+      {id:'c2',type:'switch_sw',x:-200,y:-60,rot:0,props:{closed:false}},
+      {id:'c3',type:'switch_sw',x:-200,y:60,rot:0,props:{closed:false}},
+      {id:'c4',type:'gate_and',x:-40,y:0,rot:0,props:{Vcc:5}},
+      {id:'c5',type:'resistor',x:100,y:0,rot:0,props:{R:330}},
+      {id:'c6',type:'led',x:220,y:0,rot:0,props:{Vf:2.0,color:'#ff3b3b',Imax:0.025,burned:false}}
+    ],
+    wires:[
+      {a:{compId:'c1',term:1},b:{compId:'c2',term:0}},
+      {a:{compId:'c2',term:1},b:{compId:'c4',term:0}},
+      {a:{compId:'c1',term:1},b:{compId:'c3',term:0}},
+      {a:{compId:'c3',term:1},b:{compId:'c4',term:1}},
+      {a:{compId:'c1',term:1},b:{compId:'c4',term:3}},
+      {a:{compId:'c1',term:0},b:{compId:'c4',term:4}},
+      {a:{compId:'c4',term:2},b:{compId:'c5',term:0}},
+      {a:{compId:'c5',term:1},b:{compId:'c6',term:0}},
+      {a:{compId:'c6',term:1},b:{compId:'c1',term:0}, bends:[{x:220,y:140},{x:-360,y:140}]}
+    ]}
+];
+
+function openExamplesOverlay(){
+  let html = '<div class="slist">';
+  EXAMPLE_CIRCUITS.forEach((ex,i)=>{
+    html += `<div class="sitem" data-exidx="${i}" style="align-items:flex-start;">
+      <div style="flex:1;">
+        <div class="name">${ex.name}</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:3px;line-height:1.4;">${ex.desc}</div>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  openOverlay('📚 Circuitos de Ejemplo', html);
+  overlayBody.querySelectorAll('[data-exidx]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const ex = EXAMPLE_CIRCUITS[parseInt(el.dataset.exidx)];
+      if(comps.length && !confirm('¿Reemplazar el circuito actual con este ejemplo?')) return;
+      loadCircuitFromData(ex);
+      closeOverlay();
+    });
+  });
+}
+
+// ------------------------------------------------------------
+// PARTE G — Generador de tabla de verdad
+// ------------------------------------------------------------
+const TRUTH_FN = {
+  gate_and:{n:2, fn:(a,b)=>a&&b, sym:'AND'},
+  gate_or:{n:2, fn:(a,b)=>a||b, sym:'OR'},
+  gate_nand:{n:2, fn:(a,b)=>!(a&&b), sym:'NAND'},
+  gate_nor:{n:2, fn:(a,b)=>!(a||b), sym:'NOR'},
+  gate_xor:{n:2, fn:(a,b)=>a!==b, sym:'XOR'},
+  gate_xnor:{n:2, fn:(a,b)=>a===b, sym:'XNOR'},
+  gate_not:{n:1, fn:(a)=>!a, sym:'NOT'},
+  gate_buffer:{n:1, fn:(a)=>a, sym:'BUFFER'}
+};
+function showTruthTable(c){
+  const info = TRUTH_FN[c.type];
+  if(!info){ openOverlay('🧮 Tabla de Verdad', '<div class="empty">Este componente no tiene tabla de verdad lógica.</div>'); return; }
+  const combos = info.n===1? [[0],[1]] : [[0,0],[0,1],[1,0],[1,1]];
+  let rows='';
+  combos.forEach(combo=>{
+    const out = info.fn(...combo.map(v=>!!v)) ? 1:0;
+    rows += `<tr>${combo.map(v=>`<td style="padding:6px 14px;text-align:center;border:1px solid var(--border);">${v}</td>`).join('')}<td style="padding:6px 14px;text-align:center;border:1px solid var(--border);color:var(--accent2);font-weight:700;">${out}</td></tr>`;
+  });
+  const headers = info.n===1? ['IN']:['IN1','IN2'];
+  const html = `
+    <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Compuerta ${info.sym}</p>
+    <table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:12px;">
+      <thead><tr>${headers.map(h=>`<th style="padding:6px 14px;border:1px solid var(--border);color:var(--accent);">${h}</th>`).join('')}<th style="padding:6px 14px;border:1px solid var(--border);color:var(--accent);">OUT</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  openOverlay('🧮 Tabla de Verdad — '+COMPONENTS[c.type].label, html);
+}
+
+// ------------------------------------------------------------
+// PARTE H — Botones de la barra superior y del panel rápido
+// ------------------------------------------------------------
+const btnUndo=document.createElement('button'); btnUndo.className='tbtn'; btnUndo.id='btnUndo'; btnUndo.textContent='↶';
+btnUndo.addEventListener('click', undo); topbarEl.appendChild(btnUndo);
+
+const btnRedo=document.createElement('button'); btnRedo.className='tbtn'; btnRedo.id='btnRedo'; btnRedo.textContent='↷';
+btnRedo.addEventListener('click', redo); topbarEl.appendChild(btnRedo);
+
+const btnMultiSelect=document.createElement('button'); btnMultiSelect.className='tbtn'; btnMultiSelect.id='btnMultiSelect'; btnMultiSelect.textContent='🔲 Selec.';
+btnMultiSelect.addEventListener('click', ()=>{
+  multiSelectMode = !multiSelectMode;
+  btnMultiSelect.classList.toggle('on', multiSelectMode);
+  if(multiSelectMode){
+    wireMode=false; cutMode=false; bendMode=false; selectedType=null;
+    updateModeUI(); updatePlacingChip();
+    document.getElementById('btnBend')?.classList.remove('on');
+  }
+  refreshMultiSelectUI();
+});
+topbarEl.appendChild(btnMultiSelect);
+
+const btnPaste=document.createElement('button'); btnPaste.className='tbtn'; btnPaste.id='btnPaste'; btnPaste.textContent='📌 Pegar';
+btnPaste.addEventListener('click', pasteClipboard); topbarEl.appendChild(btnPaste);
+
+const btnBend=document.createElement('button'); btnBend.className='tbtn'; btnBend.id='btnBend'; btnBend.textContent='🧷 Doblar';
+btnBend.addEventListener('click', ()=>{
+  bendMode = !bendMode;
+  btnBend.classList.toggle('on', bendMode);
+  if(bendMode){
+    wireMode=false; cutMode=false; multiSelectMode=false; selectedType=null;
+    updateModeUI(); updatePlacingChip();
+    document.getElementById('btnMultiSelect')?.classList.remove('on');
+    refreshMultiSelectUI();
+  }
+});
+topbarEl.appendChild(btnBend);
+
+const btnSound=document.createElement('button'); btnSound.className='tbtn on'; btnSound.id='btnSound'; btnSound.textContent='🔊 Sonido';
+btnSound.addEventListener('click', ()=>{
+  soundEnabled=!soundEnabled;
+  btnSound.classList.toggle('on', soundEnabled);
+  btnSound.textContent = soundEnabled? '🔊 Sonido':'🔇 Sonido';
+  if(!soundEnabled) activeTones.forEach((v,id)=>stopTone(id));
+});
+topbarEl.appendChild(btnSound);
+
+const btnExamples=document.createElement('button'); btnExamples.className='tbtn'; btnExamples.id='btnExamples'; btnExamples.textContent='📚 Ejemplos';
+btnExamples.addEventListener('click', openExamplesOverlay); topbarEl.appendChild(btnExamples);
+
+// Botones extra en el panel rápido (componente seleccionado)
+const btn45=document.createElement('button'); btn45.className='tbtn'; btn45.id='btnRotate45'; btn45.textContent='⟳45°';
+btn45.addEventListener('click', ()=>{ if(selectedComp){ selectedComp.rot=(selectedComp.rot+45)%360; commitHistory(); } });
+quickActionsEl.appendChild(btn45);
+
+const btnTruth=document.createElement('button'); btnTruth.className='tbtn'; btnTruth.id='btnTruthTable'; btnTruth.textContent='🧮 Tabla';
+btnTruth.addEventListener('click', ()=>{ if(selectedComp) showTruthTable(selectedComp); });
+quickActionsEl.appendChild(btnTruth);
+
+const btnCopy1=document.createElement('button'); btnCopy1.className='tbtn'; btnCopy1.id='btnCopyOne'; btnCopy1.textContent='📋 Copiar';
+btnCopy1.addEventListener('click', ()=>{ if(selectedComp){ multiSelected=new Set([selectedComp.id]); copySelection(); refreshMultiSelectUI(); } });
+quickActionsEl.appendChild(btnCopy1);
+
+// Refuerzos de historial y limpieza de modos en botones existentes
+document.getElementById('btnRotate')?.addEventListener('click', ()=> commitHistory());
+document.getElementById('btnDelete')?.addEventListener('click', ()=> commitHistory());
+document.getElementById('btnClear')?.addEventListener('click', ()=>{ multiSelected.clear(); multiSelectMode=false; refreshMultiSelectUI(); commitHistory(); });
+['btnWire','btnCutWire','btnAddComp'].forEach(id=>{
+  document.getElementById(id)?.addEventListener('click', ()=>{
+    multiSelectMode=false; bendMode=false;
+    document.getElementById('btnMultiSelect')?.classList.remove('on');
+    document.getElementById('btnBend')?.classList.remove('on');
+    refreshMultiSelectUI();
+  });
+});
+
+updateHistoryButtons();
+refreshMultiSelectUI();
+
+})();
+</script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
