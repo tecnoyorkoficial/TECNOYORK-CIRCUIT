@@ -6570,6 +6570,39 @@ if(COMPONENTS.comparator){
 
 })();
 </script>
+  <script>
+// ============================================================
+// fix-referencia-tierra-global.js — Corrige la detección del
+// nodo de tierra: ahora reconoce CUALQUIER fuente como ancla,
+// no solo el tipo 'battery'.
+// ============================================================
+(function(){
+  const FUENTES_TIPOS = [
+    'battery','aa_battery','coin_cell','usb_port','solar_panel',
+    'lipo_3s_battery','battery_18650','acsource','current_source',
+    'thermocouple','piezo_sensor'
+  ];
+
+  CircuitSim.prototype.buildTopology = function(comps, wires){
+    const termId = (compId,ti)=> compId+'#'+ti;
+    const ids = new Map(); let n=0;
+    comps.forEach(c=> c.terminals.forEach((t,ti)=>{ ids.set(termId(c.id,ti), n++); }));
+
+    let refKey = null;
+    const gnd = comps.find(c=>DEF(c).isGround);
+    if(gnd){
+      refKey = termId(gnd.id,0);
+    } else {
+      // Busca la PRIMERA fuente reconocida (de cualquier tipo) y usa
+      // su terminal negativo/terminal 0 como referencia de tierra.
+      const fuente = comps.find(c=> FUENTES_TIPOS.includes(c.type));
+      if(fuente) refKey = termId(fuente.id,0);
+    }
+    const refNode = refKey!==null ? ids.get(refKey) : (n>0?0:null);
+    return {ids, termId, refNode, totalTerminals:n};
+  };
+})();
+</script>               
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
