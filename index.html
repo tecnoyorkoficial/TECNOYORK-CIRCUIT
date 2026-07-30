@@ -6467,6 +6467,116 @@ if(oldBtnEnv){
 })();
 </script>
 <script>
+// ============================================================
+// fix-compuertas-logicas.js — Corrige el funcionamiento de todas
+// las compuertas lógicas (y SR-Latch/Comparador/Schmitt).
+// Antes: si no cableabas VCC/GND, quedaban en OPEN permanente.
+// Ahora: usan Vcc interno por defecto, y si cableas alimentación
+// real (>=3V entre VCC y GND), usan esa en su lugar.
+// Pegar al final, después de todos los demás <script>.
+// ============================================================
+(function(){
+
+function ensurePowerPins(def){
+  if(!def.terminals.some(t=>t.name==='VCC')){
+    def.terminals.push(T(0,-30,'VCC'), T(0,30,'GND'));
+  }
+  return {
+    vI: def.terminals.findIndex(t=>t.name==='VCC'),
+    gI: def.terminals.findIndex(t=>t.name==='GND')
+  };
+}
+function effectiveVcc(c, vI, gI){
+  const vcc = (c.state?.['Vt'+vI]||0) - (c.state?.['Vt'+gI]||0);
+  return vcc >= 3.0 ? vcc : c.props.Vcc;
+}
+
+// ---- Compuertas de 2 entradas: AND, OR, NAND, NOR, XOR, XNOR ----
+const GATE_FN = {
+  gate_and:(a,b)=>a&&b, gate_or:(a,b)=>a||b, gate_nand:(a,b)=>!(a&&b),
+  gate_nor:(a,b)=>!(a||b), gate_xor:(a,b)=>a!==b, gate_xnor:(a,b)=>a===b
+};
+Object.keys(GATE_FN).forEach(type=>{
+  const def = COMPONENTS[type]; if(!def) return;
+  const fn = GATE_FN[type];
+  const {vI,gI} = ensurePowerPins(def);
+  def.edges = function(c){
+    const vcc = effectiveVcc(c, vI, gI);
+    const a = (c.state?.Vin0||0) > vcc/2;
+    const b = (c.state?.Vin1||0) > vcc/2;
+    return [{n:[2,'GND'], type:'GATEOUT', value: fn(a,b)? vcc:0, tag:'gate', Rint:10}];
+  };
+});
+
+// ---- NOT y BUFFER (1 entrada) ----
+['gate_not','gate_buffer'].forEach(type=>{
+  const def = COMPONENTS[type]; if(!def) return;
+  const isNot = type==='gate_not';
+  const {vI,gI} = ensurePowerPins(def);
+  def.edges = function(c){
+    const vcc = effectiveVcc(c, vI, gI);
+    const a = (c.state?.Vin0||0) > vcc/2;
+    const out = isNot? !a : a;
+    return [{n:[1,'GND'], type:'GATEOUT', value: out? vcc:0, tag:'gate', Rint:10}];
+  };
+});
+
+// ---- SR Latch ----
+if(COMPONENTS.sr_latch){
+  const def = COMPONENTS.sr_latch;
+  const {vI,gI} = ensurePowerPins(def);
+  def.step = function(c, dt){
+    const vcc = effectiveVcc(c, vI, gI);
+    const S = (c.state?.Vin0||0) > vcc/2;
+    const R = (c.state?.Vin1||0) > vcc/2;
+    let q = c.state.Q ?? false;
+    if(S && !R) q = true;
+    else if(R && !S) q = false;
+    else if(S && R) q = false;
+    c.state.Q = q;
+  };
+  def.edges = function(c){
+    const vcc = effectiveVcc(c, vI, gI);
+    const q = c.state?.Q ?? false;
+    return [
+      {n:[2,'GND'], type:'GATEOUT', value: q? vcc:0, tag:'gate', Rint:10},
+      {n:[3,'GND'], type:'GATEOUT', value: q? 0:vcc, tag:'gate', Rint:10}
+    ];
+  };
+}
+
+// ---- Comparador LM393 ----
+if(COMPONENTS.comparator){
+  const def = COMPONENTS.comparator;
+  const {vI,gI} = ensurePowerPins(def);
+  def.edges = function(c){
+    effectiveVcc(c, vI, gI); // asegura Vcc interno disponible aunque no se use directamente
+    const highSide = (c.state?.Vt0||0) > (c.state?.Vt1||0);
+    return [{n:[2,'GND'], type: highSide? 'OPEN':'R', value: highSide? 1e9 : 15}];
+  };
+}
+
+// ---- Disparador Schmitt ----
+if(COMPONENTS.schmitt_trigger){
+  const def = COMPONENTS.schmitt_trigger;
+  const {vI,gI} = ensurePowerPins(def);
+  def.edges = function(c){
+    const vcc = effectiveVcc(c, vI, gI);
+    const hi = c.state?.hi ?? false;
+    return [{n:[1,'GND'], type:'GATEOUT', value: !hi? vcc:0, tag:'gate', Rint:10}];
+  };
+  def.postSolve = function(c){
+    const Vin = c.state?.Vt0||0;
+    let hi = c.state?.hi ?? false;
+    if(!hi && Vin > c.props.Vhigh) hi = true;
+    else if(hi && Vin < c.props.Vlow) hi = false;
+    c.state.hi = hi;
+  };
+}
+
+})();
+</script>
+<script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('service-worker.js')
