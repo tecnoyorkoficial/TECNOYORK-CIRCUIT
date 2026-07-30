@@ -6466,39 +6466,22 @@ if(oldBtnEnv){
   btnBOM.addEventListener('click', openBOM);
 })();
 </script>
- <script>
+<script>
 // ============================================================
-// fix-compuertas-final.js — Versión única y definitiva.
-// Reemplaza TODOS los scripts anteriores de corrección de
-// compuertas lógicas (correccion-pines-faltantes.js y
-// fix-compuertas-logicas.js). Pegar al final, antes de </body>.
+// fix-referencia-tierra-logica.js — Corrige el bug real:
+// la salida de la lógica quedaba referenciada al pin GND local
+// (flotante si no se cablea), forzando su corriente a 0.
+// Ahora la salida siempre referencia la tierra real del circuito;
+// los pines VCC/GND locales solo se usan para saber si el chip
+// está alimentado (con reserva a Vcc interno si no se cablean).
 // ============================================================
 (function(){
 
-function ensurePowerPins(def){
-  let vI = def.terminals.findIndex(t=>t.name==='VCC');
-  let gI = def.terminals.findIndex(t=>t.name==='GND');
-  if(vI===-1 || gI===-1){
-    vI = def.terminals.length;
-    gI = vI+1;
-    def.terminals.push(T(0,-30,'VCC'), T(0,30,'GND'));
-  }
-  return {vI, gI};
-}
-// Usa el pin GND propio si está cableado a algo real (>=3V medibles
-// entre VCC y GND); si no, cae en un Vcc interno para que la
-// compuerta nunca deje de funcionar por falta de cableado.
-function effectiveVcc(c, vI, gI){
+function findPin(def, name){ return def.terminals.findIndex(t=>t.name===name); }
+function effVcc(c, vI, gI, fallback){
+  if(vI<0 || gI<0) return fallback;
   const vcc = (c.state?.['Vt'+vI]||0) - (c.state?.['Vt'+gI]||0);
-  return vcc >= 3.0 ? vcc : c.props.Vcc;
-}
-// La salida SIEMPRE referencia el pin GND físico del componente
-// (nunca la tierra global directa) — así el comportamiento es
-// consistente con el cableado real que dibujaste.
-function gateOutEdge(outIdx, gI, valueFn){
-  return function(c){
-    return [{n:[outIdx,gI], type:'GATEOUT', value:valueFn(c), tag:'gate', Rint:10}];
-  };
+  return vcc >= 3.0 ? vcc : fallback;
 }
 
 const GATE_FN = {
@@ -6508,58 +6491,80 @@ const GATE_FN = {
 Object.keys(GATE_FN).forEach(type=>{
   const def = COMPONENTS[type]; if(!def) return;
   const fn = GATE_FN[type];
-  const {vI,gI} = ensurePowerPins(def);
-  def.edges = gateOutEdge(2, gI, c=>{
-    const vcc = effectiveVcc(c, vI, gI);
-    const a=(c.state?.Vin0||0)>vcc/2, b=(c.state?.Vin1||0)>vcc/2;
-    return fn(a,b)? vcc:0;
-  });
+  const outI = findPin(def,'out');
+  const vI = findPin(def,'VCC'), gI = findPin(def,'GND');
+  def.edges = function(c){
+    const vcc = effVcc(c, vI, gI, c.props.Vcc);
+    const a = (c.state?.Vin0||0) > vcc/2;
+    const b = (c.state?.Vin1||0) > vcc/2;
+    return [{n:[outI,'GND'], type:'GATEOUT', value: fn(a,b)? vcc:0, tag:'gate', Rint:10}];
+  };
 });
 
 ['gate_not','gate_buffer'].forEach(type=>{
   const def = COMPONENTS[type]; if(!def) return;
   const isNot = type==='gate_not';
-  const {vI,gI} = ensurePowerPins(def);
-  def.edges = gateOutEdge(1, gI, c=>{
-    const vcc = effectiveVcc(c, vI, gI);
-    const a=(c.state?.Vin0||0)>vcc/2;
-    return (isNot? !a : a)? vcc:0;
-  });
+  const outI = findPin(def,'out');
+  const vI = findPin(def,'VCC'), gI = findPin(def,'GND');
+  def.edges = function(c){
+    const vcc = effVcc(c, vI, gI, c.props.Vcc);
+    const a = (c.state?.Vin0||0) > vcc/2;
+    const out = isNot? !a : a;
+    return [{n:[outI,'GND'], type:'GATEOUT', value: out? vcc:0, tag:'gate', Rint:10}];
+  };
 });
 
 if(COMPONENTS.sr_latch){
   const def = COMPONENTS.sr_latch;
-  const {vI,gI} = ensurePowerPins(def);
+  const qI = findPin(def,'Q'), qbI = findPin(def,'Q̄');
+  const vI = findPin(def,'VCC'), gI = findPin(def,'GND');
   def.step = function(c, dt){
-    const vcc = effectiveVcc(c, vI, gI);
-    const S=(c.state?.Vin0||0)>vcc/2, R=(c.state?.Vin1||0)>vcc/2;
+    const vcc = effVcc(c, vI, gI, c.props.Vcc);
+    const S = (c.state?.Vin0||0) > vcc/2;
+    const R = (c.state?.Vin1||0) > vcc/2;
     let q = c.state.Q ?? false;
-    if(S&&!R) q=true; else if(R&&!S) q=false; else if(S&&R) q=false;
-    c.state.Q=q;
+    if(S && !R) q = true;
+    else if(R && !S) q = false;
+    else if(S && R) q = false;
+    c.state.Q = q;
   };
   def.edges = function(c){
-    const vcc = effectiveVcc(c, vI, gI);
+    const vcc = effVcc(c, vI, gI, c.props.Vcc);
     const q = c.state?.Q ?? false;
     return [
-      {n:[2,gI], type:'GATEOUT', value: q?vcc:0, tag:'gate', Rint:10},
-      {n:[3,gI], type:'GATEOUT', value: q?0:vcc, tag:'gate', Rint:10}
+      {n:[qI,'GND'],  type:'GATEOUT', value: q? vcc:0, tag:'gate', Rint:10},
+      {n:[qbI,'GND'], type:'GATEOUT', value: q? 0:vcc, tag:'gate', Rint:10}
     ];
   };
 }
 
 if(COMPONENTS.schmitt_trigger){
   const def = COMPONENTS.schmitt_trigger;
-  const {vI,gI} = ensurePowerPins(def);
-  def.edges = gateOutEdge(1, gI, c=>{
-    const vcc = effectiveVcc(c, vI, gI);
-    return (!(c.state?.hi ?? false))? vcc:0;
-  });
+  const outI = findPin(def,'out');
+  const vI = findPin(def,'VCC'), gI = findPin(def,'GND');
+  def.edges = function(c){
+    const vcc = effVcc(c, vI, gI, c.props.Vcc);
+    const hi = c.state?.hi ?? false;
+    return [{n:[outI,'GND'], type:'GATEOUT', value: (!hi)? vcc:0, tag:'gate', Rint:10}];
+  };
   def.postSolve = function(c){
     const Vin = c.state?.Vt0||0;
     let hi = c.state?.hi ?? false;
     if(!hi && Vin > c.props.Vhigh) hi = true;
     else if(hi && Vin < c.props.Vlow) hi = false;
     c.state.hi = hi;
+  };
+}
+
+if(COMPONENTS.comparator){
+  const def = COMPONENTS.comparator;
+  const outI = findPin(def,'out');
+  const vI = findPin(def,'VCC'), gI = findPin(def,'GND');
+  def.edges = function(c){
+    const vcc = effVcc(c, vI, gI, c.props.Vcc || 5);
+    if(vcc < 1) return [{n:[outI,'GND'], type:'OPEN', value:1e9}];
+    const highSide = (c.state?.Vt0||0) > (c.state?.Vt1||0);
+    return [{n:[outI,'GND'], type: highSide? 'OPEN':'R', value: highSide? 1e9 : 15}];
   };
 }
 
